@@ -182,6 +182,28 @@ export function debugWebSocket(event, data) {
 }
 
 /**
+ * Log QWebChannel client events for DLA embedded browser communication
+ * @param {string} event - Event type (e.g., "connecting", "connected", "signal", "error")
+ * @param {any} data - Associated data
+ */
+export function debugQWebChannel(event, data) {
+  if (DEBUG_ENABLED) {
+    console.log("[Dice Link QWebChannel]", event, data);
+  }
+}
+
+/**
+ * Log WebRTC client events
+ * @param {string} event - Event type (e.g., "offer", "answer", "connected", "error")
+ * @param {any} data - Associated data
+ */
+export function debugWebRTC(event, data) {
+  if (DEBUG_ENABLED) {
+    console.log("[Dice Link WebRTC]", event, data);
+  }
+}
+
+/**
  * Log element width measurements to debug stretching
  * @param {string} stage - Stage of measurement (e.g., "content area", "panel", "cloned dialog", "nav")
  * @param {HTMLElement} element - Element to measure
