@@ -78,11 +78,6 @@ import {
 } from "./debug.js";
 
 import {
-  parseDiceFromFormula,
-  executeRollWithValues
-} from "./dice-parsing.js";
-
-import {
   generateDiceTrayHTML,
   generateRollRequestSection,
   generatePendingRollHTML,
@@ -120,14 +115,12 @@ import {
   setButtonSelectCallback,
   setDiceResultCallback,
   setCancelCallback,
-  setRollResultCallback,
   setDiceTrayRollCallback,
   setPlayerModeActionCallback
 } from "./qwebchannel-client.js";
 
 import {
   extractRollDataForDLA,
-  getPendingDiceRequest,
   clearPendingDiceRequest
 } from "./websocket-client.js";
 
@@ -542,17 +535,6 @@ Hooks.once("ready", async () => {
       }, 100);
     });
     
-    // Legacy handler for backward compatibility
-    setRollResultCallback((rollId, results, configChanges, buttonClicked) => {
-      debug("Legacy roll result from DLA (using two-phase handlers instead)", { rollId, buttonClicked });
-      // Forward to Phase A handler if results are empty (button select only)
-      // Otherwise this is a combined message from older DLA version
-      if (!results || results.length === 0) {
-        // Just button selection
-        setButtonSelectCallback && setButtonSelectCallback(rollId, buttonClicked, configChanges);
-      }
-    });
-
     // Apply initial dice mode based on settings
     const globalOverride = getGlobalOverride();
     

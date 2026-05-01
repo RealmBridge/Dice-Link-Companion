@@ -1,11 +1,11 @@
 /**
  * Debug Module - Centralized debugging for Dice Link Companion
- * 
- * Set DEBUG_ENABLED to true to enable logging, false to disable.
- * All debug output goes through this module for easy cleanup.
+ *
+ * Toggle DEBUG in constants.js to enable/disable all logging.
  */
 
-const DEBUG_ENABLED = true;
+import { DEBUG } from "./constants.js";
+const DEBUG_ENABLED = DEBUG;
 
 /**
  * Log a debug message with [Dice Link Debug] prefix
@@ -171,17 +171,6 @@ export function debugClonedButtonClick(action, data) {
 }
 
 /**
- * Log WebSocket client events for Dice Link App communication
- * @param {string} event - Event type (e.g., "connecting", "connected", "message", "error", "closed")
- * @param {any} data - Associated data
- */
-export function debugWebSocket(event, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link WebSocket]", event, data);
-  }
-}
-
-/**
  * Log QWebChannel client events for DLA embedded browser communication
  * @param {string} event - Event type (e.g., "connecting", "connected", "signal", "error")
  * @param {any} data - Associated data
@@ -189,17 +178,6 @@ export function debugWebSocket(event, data) {
 export function debugQWebChannel(event, data) {
   if (DEBUG_ENABLED) {
     console.log("[Dice Link QWebChannel]", event, data);
-  }
-}
-
-/**
- * Log WebRTC client events
- * @param {string} event - Event type (e.g., "offer", "answer", "connected", "error")
- * @param {any} data - Associated data
- */
-export function debugWebRTC(event, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link WebRTC]", event, data);
   }
 }
 

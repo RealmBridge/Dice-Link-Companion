@@ -4,7 +4,7 @@
  * This is the primary UI orchestration module.
  */
 
-import { MODULE_ID, ROLE_NAMES, ASYNC_OPERATION_DELAY_MS, DICE_LINK_APP_PORT, CONNECTION_METHOD } from "./constants.js";
+import { MODULE_ID, ROLE_NAMES, ASYNC_OPERATION_DELAY_MS, DICE_LINK_APP_PORT } from "./constants.js";
 import { debug, debugState, debugError, debugPanelInjection, debugComputedStyles, debugClonedButtonClick, debugElementDimensions } from "./debug.js";
 import { 
   getCurrentPanelDialog, 

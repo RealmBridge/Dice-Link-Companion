@@ -6,6 +6,9 @@
  * All other modules import from this file to ensure single source of truth for constants.
  */
 
+// Debug switch — set to false to silence all DLC console logging
+export const DEBUG = true;
+
 // Module metadata
 export const MODULE_ID = "dice-link-companion";
 export const MODULE_VERSION = "1.0.9.11";
@@ -23,13 +26,6 @@ export const ASYNC_OPERATION_DELAY_MS = 40;
 // Each player connects to their own local DLA instance on explicit IPv4
 export const DICE_LINK_APP_HOST = "127.0.0.1";
 export const DICE_LINK_APP_PORT = 8765;
-export const DICE_LINK_APP_WS_URL = `ws://${DICE_LINK_APP_HOST}:${DICE_LINK_APP_PORT}/ws/dlc`;
-
-// Connection method
-// "websocket" = legacy WebSocket (for fallback)
-// "webrtc" = WebRTC Data Channels (primary, bypasses PNA)
-export const CONNECTION_METHOD = "webrtc";
-
 // Dice configuration
 export const DICE_TYPES = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
 

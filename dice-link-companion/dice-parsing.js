@@ -4,8 +4,6 @@
  * Uses Foundry's native Roll API for validation to support ALL Foundry dice notation.
  */
 
-import { debugError } from "./debug.js";
-
 /**
  * Validate a dice formula using Foundry's native Roll.validate() method.
  * This ensures we support all Foundry-supported notation (kh, kl, x, r, cs, etc.)
@@ -59,66 +57,3 @@ export function parseDiceFromFormula(formula) {
   return diceNeeded;
 }
 
-/**
- * Execute a roll with user-provided dice values
- * Replaces the random results with actual user-entered values and sends to chat
- * @param {string} formula - Dice formula to roll
- * @param {Array} diceResults - Array of user-provided die results
- * @param {string} title - Roll title
- * @param {string} subtitle - Roll subtitle (actor name)
- * @param {Object} rollConfig - Configuration object with advantage/disadvantage flags
- * @param {Object} originalConfig - Original roll configuration for context
- */
-export async function executeRollWithValues(formula, diceResults, title, subtitle, rollConfig, originalConfig) {
-  try {
-    // Create the roll
-    const roll = new Roll(formula);
-    
-    // We need to manually set the dice results before evaluation
-    // Parse the roll to get terms
-    await roll.evaluate({ allowInteractive: false });
-    
-    // Now we need to replace the random results with user values
-    let resultIndex = 0;
-    for (const term of roll.terms) {
-      if (term instanceof foundry.dice.terms.DiceTerm) {
-        for (let i = 0; i < term.results.length; i++) {
-          if (diceResults[resultIndex] !== undefined) {
-            term.results[i].result = diceResults[resultIndex];
-          }
-          resultIndex++;
-        }
-        // Recalculate the term's total
-        term._evaluateModifiers();
-      }
-    }
-    
-    // Recalculate the roll total
-    roll._total = roll._evaluateTotal();
-    
-    // Build flavor text
-    let flavor = title;
-    if (subtitle && subtitle !== "Unknown") {
-      flavor = `${title} - ${subtitle}`;
-    }
-    if (rollConfig?.advantage) {
-      flavor += " (Advantage)";
-    } else if (rollConfig?.disadvantage) {
-      flavor += " (Disadvantage)";
-    }
-    
-    // Get actor for speaker
-    const actor = originalConfig?.subject?.parent || originalConfig?.subject || game.user.character;
-    
-    // Send to chat
-    await roll.toMessage({
-      speaker: ChatMessage.getSpeaker({ actor }),
-      flavor: flavor,
-      rollMode: game.settings.get("core", "rollMode")
-    });
-    
-  } catch (e) {
-    debugError("Error executing roll with values:", e);
-    ui.notifications.error("Failed to execute roll.");
-  }
-}
