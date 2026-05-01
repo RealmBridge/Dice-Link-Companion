@@ -7,13 +7,12 @@
  * and reconnection logic.
  */
 
-import { 
-  MODULE_ID, 
-  DICE_LINK_APP_WS_URL,
+import {
+  MODULE_ID,
   DICE_LINK_APP_HOST,
   DICE_LINK_APP_PORT
 } from "./constants.js";
-import { debugWebSocket, debugError } from "./debug.js";
+import { debug as debugWebSocket, debugError } from "./debug.js";
 
 // ============================================================================
 // STATE
