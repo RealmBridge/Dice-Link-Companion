@@ -11,11 +11,12 @@ import { getCollapsedSections } from "./settings.js";
 let streamOverlay = null;
 let streamImg = null;
 let hideTimeout = null;
+let rollingSound = null;
 
 /**
  * Display a single frame from the dice roll camera stream.
  * Creates the overlay on first call; updates the image on subsequent calls.
- * @param {string} frameB64 - Base64-encoded JPEG frame
+ * @param {string} frameB64 - Base64-encoded PNG frame
  */
 export function showDiceStreamFrame(frameB64) {
   if (!streamOverlay) _createOverlay();
@@ -28,6 +29,11 @@ export function showDiceStreamFrame(frameB64) {
     hideTimeout = null;
     if (streamOverlay) streamOverlay.style.opacity = '1';
   }
+  // Start rolling sound on first frame of each roll
+  if (!rollingSound) {
+    AudioHelper.play({ src: "sounds/dice.wav", volume: 0.8, loop: true }, false)
+      .then(sound => { rollingSound = sound; });
+  }
 }
 
 /**
@@ -36,6 +42,10 @@ export function showDiceStreamFrame(frameB64) {
 export function endDiceStream() {
   if (hideTimeout) clearTimeout(hideTimeout);
   hideTimeout = setTimeout(_removeOverlay, 2000);
+  if (rollingSound) {
+    rollingSound.stop();
+    rollingSound = null;
+  }
 }
 
 function _createOverlay() {
