@@ -1,11 +1,87 @@
 /**
  * Video Feed Module - dice-link-companion
- * Handles video feed UI generation for the panel.
- * Currently a placeholder for future video integration features.
+ * Handles dice roll camera stream overlay on the Foundry canvas.
  */
 
 import { REALM_BRIDGE_URL, LOGO_SQUARE_URL } from "./constants.js";
 import { getCollapsedSections } from "./settings.js";
+
+// ── Camera stream overlay ─────────────────────────────────────────────────────
+
+let streamOverlay = null;
+let streamImg = null;
+let hideTimeout = null;
+
+/**
+ * Display a single frame from the dice roll camera stream.
+ * Creates the overlay on first call; updates the image on subsequent calls.
+ * @param {string} frameB64 - Base64-encoded JPEG frame
+ */
+export function showDiceStreamFrame(frameB64) {
+  if (!streamOverlay) _createOverlay();
+  if (streamImg) {
+    streamImg.src = 'data:image/jpeg;base64,' + frameB64;
+  }
+  // Cancel any pending hide so the overlay stays up while frames are arriving
+  if (hideTimeout) {
+    clearTimeout(hideTimeout);
+    hideTimeout = null;
+    if (streamOverlay) streamOverlay.style.opacity = '1';
+  }
+}
+
+/**
+ * Signal that the stream has ended — overlay fades out after a short pause.
+ */
+export function endDiceStream() {
+  if (hideTimeout) clearTimeout(hideTimeout);
+  hideTimeout = setTimeout(_removeOverlay, 2000);
+}
+
+function _createOverlay() {
+  streamOverlay = document.createElement('div');
+  streamOverlay.id = 'dlc-dice-stream';
+  Object.assign(streamOverlay.style, {
+    position: 'fixed',
+    bottom: '100px',
+    right: '20px',
+    width: '300px',
+    height: '300px',
+    background: 'rgba(0,0,0,0.85)',
+    border: '2px solid rgba(255,215,0,0.8)',
+    borderRadius: '8px',
+    zIndex: '9999',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    transition: 'opacity 0.5s ease'
+  });
+
+  streamImg = document.createElement('img');
+  Object.assign(streamImg.style, {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain'
+  });
+
+  streamOverlay.appendChild(streamImg);
+  document.body.appendChild(streamOverlay);
+}
+
+function _removeOverlay() {
+  if (streamOverlay) {
+    streamOverlay.style.opacity = '0';
+    setTimeout(() => {
+      if (streamOverlay) {
+        streamOverlay.remove();
+        streamOverlay = null;
+        streamImg = null;
+      }
+    }, 500);
+  }
+  hideTimeout = null;
+}
 
 /**
  * Generate the video feed section HTML

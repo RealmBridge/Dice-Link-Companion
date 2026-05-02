@@ -116,8 +116,12 @@ import {
   setDiceResultCallback,
   setCancelCallback,
   setDiceTrayRollCallback,
-  setPlayerModeActionCallback
+  setPlayerModeActionCallback,
+  setCameraFrameCallback,
+  setCameraStreamEndCallback
 } from "./qwebchannel-client.js";
+
+import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
 
 import {
   extractRollDataForDLA,
@@ -349,7 +353,7 @@ Hooks.once("ready", async () => {
     // ========================================================================
     setDiceTrayRollCallback(async (formula, flavor) => {
       debug("Dice tray roll from DLA", { formula, flavor });
-      
+
       try {
         // Execute the roll using Foundry's native system
         // This triggers the normal fulfillment flow - Foundry will show
@@ -360,6 +364,23 @@ Hooks.once("ready", async () => {
         debug("Error executing dice tray roll:", e);
         ui.notifications?.error(`Dice roll error: ${e.message}`);
       }
+    });
+
+    // Camera stream — GM client receives frames from DLA, displays locally
+    // and broadcasts to all other players via socket
+    setCameraFrameCallback((frameB64) => {
+      showDiceStreamFrame(frameB64);
+      game.socket.emit(`module.${MODULE_ID}`, {
+        action: "cameraFrame",
+        frameB64: frameB64
+      });
+    });
+
+    setCameraStreamEndCallback(() => {
+      endDiceStream();
+      game.socket.emit(`module.${MODULE_ID}`, {
+        action: "cameraStreamEnd"
+      });
     });
 
     // ========================================================================

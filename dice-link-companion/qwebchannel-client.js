@@ -21,6 +21,8 @@ let cancelCallback = null;
 let rollResultCallback = null;
 let diceTrayRollCallback = null;
 let playerModeActionCallback = null;
+let cameraFrameCallback = null;
+let cameraStreamEndCallback = null;
 
 // ============================================================================
 // INITIALIZATION - Check for QWebChannel / DLA Interface
@@ -225,6 +227,20 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
+    // Camera stream frames
+    if (dlaInterface.cameraFrameReady) {
+      dlaInterface.cameraFrameReady.connect((frameB64) => {
+        if (cameraFrameCallback) cameraFrameCallback(frameB64);
+      });
+    }
+
+    // Camera stream ended
+    if (dlaInterface.cameraStreamEndReady) {
+      dlaInterface.cameraStreamEndReady.connect(() => {
+        if (cameraStreamEndCallback) cameraStreamEndCallback();
+      });
+    }
+
     // Connection health check - ping/pong mechanism
     if (dlaInterface.connectionPingReady) {
       dlaInterface.connectionPingReady.connect(() => {
@@ -355,6 +371,14 @@ export function setDiceTrayRollCallback(callback) {
 
 export function setPlayerModeActionCallback(callback) {
   playerModeActionCallback = callback;
+}
+
+export function setCameraFrameCallback(callback) {
+  cameraFrameCallback = callback;
+}
+
+export function setCameraStreamEndCallback(callback) {
+  cameraStreamEndCallback = callback;
 }
 
 export function onConnectionChange(callback) {

@@ -5,7 +5,7 @@
 
 import { MODULE_ID } from "./constants.js";
 
-import { 
+import {
   getPlayerMode,
   setPlayerMode,
   getGlobalOverride,
@@ -18,6 +18,7 @@ import { createRequestChatMessage } from "./chat.js";
 import { refreshPanel } from "./dice-panel.js";
 import { applyManualDice, applyDigitalDice } from "./mode-application.js";
 import { setHasRequestedThisSession } from "./state-management.js";
+import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
 
 // ============================================================================
 // SOCKET LISTENERS
@@ -95,6 +96,14 @@ export function setupSocketListeners() {
 
     if (data.action === "requestDenied" && data.playerId === game.user.id) {
       setHasRequestedThisSession(false);
+    }
+
+    if (data.action === "cameraFrame") {
+      showDiceStreamFrame(data.frameB64);
+    }
+
+    if (data.action === "cameraStreamEnd") {
+      endDiceStream();
     }
   });
 }
