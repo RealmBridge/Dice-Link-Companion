@@ -5,7 +5,7 @@
  *            Dialog mirroring handles hiding/mirroring the RollResolver UI
  */
 
-import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
+import { ASYNC_OPERATION_DELAY_MS, MODULE_ID } from "./constants.js";
 import { debugResolverState, debugFulfillment, debugError } from "./debug.js";
 import { getMirroredDialog } from "./state-management.js";
 
@@ -188,14 +188,23 @@ export function disableDSN() {
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
     console.error("[DLC DSN] flag before change:", JSON.stringify(s));
-    _dsnEnabledBeforeManual = s.enabled !== false;
-    console.error("[DLC DSN] _dsnEnabledBeforeManual =", _dsnEnabledBeforeManual);
+    // If our own DLC flag exists, we left DSN disabled from a previous session —
+    // trust that record rather than DSN's persisted state (which already shows enabled: false)
+    const dlcFlag = game.user.getFlag(MODULE_ID, "dsnEnabledBeforeDLC");
+    if (dlcFlag !== undefined) {
+      _dsnEnabledBeforeManual = dlcFlag;
+      console.error("[DLC DSN] using DLC-persisted record, _dsnEnabledBeforeManual =", _dsnEnabledBeforeManual);
+    } else {
+      _dsnEnabledBeforeManual = s.enabled !== false;
+      console.error("[DLC DSN] _dsnEnabledBeforeManual =", _dsnEnabledBeforeManual);
+    }
     if (_dsnEnabledBeforeManual) {
       console.error("[DLC DSN] calling setFlag to disable DSN");
       game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: false });
-      console.error("[DLC DSN] setFlag called");
+      game.user.setFlag(MODULE_ID, "dsnEnabledBeforeDLC", true);
+      console.error("[DLC DSN] setFlag called, DLC record saved");
     } else {
-      console.error("[DLC DSN] DSN already disabled, no change made");
+      console.error("[DLC DSN] DSN was already disabled by user, no change made");
     }
   } catch (e) {
     console.error("[DLC DSN] error in _disableDSN:", e);
@@ -208,19 +217,21 @@ export function restoreDSN() {
     console.error("[DLC DSN] DSN module not active, skipping restore");
     return;
   }
-  if (_dsnEnabledBeforeManual === null) {
-    console.error("[DLC DSN] _dsnEnabledBeforeManual is null, nothing to restore");
+  // Check both in-memory state and the persisted DLC flag (survives page reloads)
+  const dlcFlag = game.user.getFlag(MODULE_ID, "dsnEnabledBeforeDLC");
+  const shouldRestore = _dsnEnabledBeforeManual === true || dlcFlag === true;
+  console.error("[DLC DSN] dlcFlag =", dlcFlag, "shouldRestore =", shouldRestore);
+  if (!shouldRestore) {
+    console.error("[DLC DSN] nothing to restore");
+    _dsnEnabledBeforeManual = null;
     return;
   }
   try {
-    if (_dsnEnabledBeforeManual) {
-      const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-      console.error("[DLC DSN] flag before restore:", JSON.stringify(s));
-      game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
-      console.error("[DLC DSN] setFlag called to re-enable DSN");
-    } else {
-      console.error("[DLC DSN] DSN was already disabled before, not restoring");
-    }
+    const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
+    console.error("[DLC DSN] flag before restore:", JSON.stringify(s));
+    game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
+    game.user.unsetFlag(MODULE_ID, "dsnEnabledBeforeDLC");
+    console.error("[DLC DSN] DSN re-enabled, DLC record cleared");
   } catch (e) {
     console.error("[DLC DSN] error in restoreDSN:", e);
   }
