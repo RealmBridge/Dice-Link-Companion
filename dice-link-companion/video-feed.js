@@ -33,7 +33,7 @@ export function showDiceStreamFrame(frameB64) {
   if (!rollingAudio) {
     const vol = game.settings.get("core", "globalInterfaceVolume") ?? 0.5;
     rollingAudio = new Audio("sounds/dice.wav");
-    rollingAudio.loop = true;
+    rollingAudio.loop = false;
     rollingAudio.volume = vol;
     rollingAudio.play().catch(() => {});
   }
