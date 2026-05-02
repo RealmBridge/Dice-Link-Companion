@@ -176,7 +176,7 @@ export async function submitMirroredDialog(userChoice) {
 export function setupDSNSuppression() {
   Hooks.on("preCreateChatMessage", (message) => {
     if (CONFIG.Dice.fulfillment.defaultMethod === "dice-link") {
-      message.updateSource({ "flags.dice-so-nice.skip": true });
+      message.updateSource({ flags: { "dice-so-nice": { skip: true } } });
     }
   });
 }
