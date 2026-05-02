@@ -31,8 +31,7 @@ export function showDiceStreamFrame(frameB64) {
   }
   // Start rolling sound on first frame of each roll
   if (!rollingSound) {
-    AudioHelper.play({ src: "sounds/dice.wav", volume: 0.8, loop: true }, false)
-      .then(sound => { rollingSound = sound; });
+    rollingSound = AudioHelper.play({ src: "sounds/dice.wav", volume: 0.8, loop: true, autoplay: true }, false);
   }
 }
 
@@ -53,11 +52,10 @@ function _createOverlay() {
   streamOverlay.id = 'dlc-dice-stream';
   Object.assign(streamOverlay.style, {
     position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: '60vw',
-    height: '60vh',
+    top: '0',
+    left: '0',
+    width: '100vw',
+    height: '100vh',
     background: 'transparent',
     border: 'none',
     zIndex: '9999',
