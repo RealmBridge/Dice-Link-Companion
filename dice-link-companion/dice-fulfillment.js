@@ -180,24 +180,50 @@ export function setupDSNSuppression() {
 }
 
 function _disableDSN() {
-  if (!game.modules.get("dice-so-nice")?.active) return;
+  console.error("[DLC DSN] _disableDSN called");
+  if (!game.modules.get("dice-so-nice")?.active) {
+    console.error("[DLC DSN] DSN module not active, skipping");
+    return;
+  }
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
+    console.error("[DLC DSN] flag before change:", JSON.stringify(s));
     _dsnEnabledBeforeManual = s.enabled !== false;
+    console.error("[DLC DSN] _dsnEnabledBeforeManual =", _dsnEnabledBeforeManual);
     if (_dsnEnabledBeforeManual) {
+      console.error("[DLC DSN] calling setFlag to disable DSN");
       game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: false });
+      console.error("[DLC DSN] setFlag called");
+    } else {
+      console.error("[DLC DSN] DSN already disabled, no change made");
     }
-  } catch (e) { /* DSN not ready */ }
+  } catch (e) {
+    console.error("[DLC DSN] error in _disableDSN:", e);
+  }
 }
 
 export function restoreDSN() {
-  if (!game.modules.get("dice-so-nice")?.active || _dsnEnabledBeforeManual === null) return;
+  console.error("[DLC DSN] restoreDSN called, _dsnEnabledBeforeManual =", _dsnEnabledBeforeManual);
+  if (!game.modules.get("dice-so-nice")?.active) {
+    console.error("[DLC DSN] DSN module not active, skipping restore");
+    return;
+  }
+  if (_dsnEnabledBeforeManual === null) {
+    console.error("[DLC DSN] _dsnEnabledBeforeManual is null, nothing to restore");
+    return;
+  }
   try {
     if (_dsnEnabledBeforeManual) {
       const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
+      console.error("[DLC DSN] flag before restore:", JSON.stringify(s));
       game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
+      console.error("[DLC DSN] setFlag called to re-enable DSN");
+    } else {
+      console.error("[DLC DSN] DSN was already disabled before, not restoring");
     }
-  } catch (e) { /* DSN not ready */ }
+  } catch (e) {
+    console.error("[DLC DSN] error in restoreDSN:", e);
+  }
   _dsnEnabledBeforeManual = null;
 }
 
