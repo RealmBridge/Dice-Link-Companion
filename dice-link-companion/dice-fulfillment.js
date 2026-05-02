@@ -179,6 +179,20 @@ export function setupDSNSuppression() {
   // No hooks needed — suppression is tied to the mode switch.
 }
 
+export function ensureDSNEnabled() {
+  if (!game.modules.get("dice-so-nice")?.active) return;
+  try {
+    const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
+    if (s.enabled === false) {
+      game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
+      console.error("[DLC DSN] DSN was disabled on startup — re-enabled");
+    }
+    _dsnEnabledBeforeManual = null;
+  } catch (e) {
+    console.error("[DLC DSN] error in ensureDSNEnabled:", e);
+  }
+}
+
 export function disableDSN() {
   console.error("[DLC DSN] _disableDSN called");
   if (!game.modules.get("dice-so-nice")?.active) {

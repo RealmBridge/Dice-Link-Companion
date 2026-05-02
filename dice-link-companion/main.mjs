@@ -96,6 +96,7 @@ import {
 import {
   setupDiceFulfillment,
   setupDSNSuppression,
+  ensureDSNEnabled,
   restoreDSN,
   executeDiceTrayRollManually,
   submitMirroredDialog,
@@ -581,6 +582,10 @@ Hooks.once("ready", async () => {
       }, 100);
     });
     
+    // Ensure DSN is enabled before applying initial mode — corrects any stuck
+    // disabled state left over from a previous session that ended in manual mode
+    ensureDSNEnabled();
+
     // Apply initial dice mode based on settings
     const globalOverride = getGlobalOverride();
     
