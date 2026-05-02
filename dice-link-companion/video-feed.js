@@ -31,7 +31,7 @@ export function showDiceStreamFrame(frameB64) {
   }
   // Start rolling sound on first frame of each roll
   if (!rollingSound) {
-    rollingSound = AudioHelper.play({ src: "sounds/dice.wav", volume: 0.8, loop: true, autoplay: true }, false);
+    rollingSound = foundry.audio.AudioHelper.play({ src: "sounds/dice.wav", volume: 0.8, loop: true, autoplay: true, channel: "interface" }, false);
   }
 }
 
