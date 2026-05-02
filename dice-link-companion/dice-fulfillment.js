@@ -5,7 +5,7 @@
  *            Dialog mirroring handles hiding/mirroring the RollResolver UI
  */
 
-import { ASYNC_OPERATION_DELAY_MS, MODULE_ID } from "./constants.js";
+import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
 import { debugResolverState, debugFulfillment, debugError } from "./debug.js";
 import { getMirroredDialog } from "./state-management.js";
 
@@ -168,34 +168,37 @@ export async function submitMirroredDialog(userChoice) {
 // DSN SUPPRESSION
 // ============================================================================
 
+// Saved DSN enabled state — set when entering manual mode, restored on exit.
+let _dsnEnabledBeforeManual = null;
+
 /**
- * Suppress Dice So Nice animations for all players when a dice-link roll is submitted.
- * DSN does not check message flags — it checks game.dice3d.messageHookDisabled.
- * We set that flag in preCreateChatMessage (rolling client) and createChatMessage
- * (all other clients), then reset it via setTimeout after DSN's handler has run.
+ * Called once at startup. DSN suppression is now handled directly in
+ * applyDiceLinkFulfillment / removeDiceLinkFulfillment via the DSN enabled setting.
  */
 export function setupDSNSuppression() {
-  // Rolling client: fires before createChatMessage.
-  // Mark the message with a DLC flag so other clients can identify it as a DLA roll.
-  Hooks.on("preCreateChatMessage", (message) => {
-    if (CONFIG.Dice.fulfillment.defaultMethod === "dice-link") {
-      message.updateSource({ flags: { [MODULE_ID]: { isDLARoll: true } } });
-      if (game.dice3d) {
-        game.dice3d.messageHookDisabled = true;
-        setTimeout(() => { if (game.dice3d) game.dice3d.messageHookDisabled = false; }, 0);
-      }
-    }
-  });
+  // No hooks needed — suppression is tied to the mode switch.
+}
 
-  // All clients: fires when the message arrives (after preCreateChatMessage on rolling client,
-  // and directly on all other clients). DLC loads before DSN alphabetically so this
-  // handler always runs before DSN's createChatMessage handler.
-  Hooks.on("createChatMessage", (message) => {
-    if (message.getFlag(MODULE_ID, "isDLARoll") && game.dice3d) {
-      game.dice3d.messageHookDisabled = true;
-      setTimeout(() => { if (game.dice3d) game.dice3d.messageHookDisabled = false; }, 0);
+function _disableDSN() {
+  if (!game.modules.get("dice-so-nice")?.active) return;
+  try {
+    const s = game.settings.get("dice-so-nice", "settings") ?? {};
+    _dsnEnabledBeforeManual = s.enabled !== false;
+    if (_dsnEnabledBeforeManual) {
+      game.settings.set("dice-so-nice", "settings", { ...s, enabled: false });
     }
-  });
+  } catch (e) { /* DSN not ready */ }
+}
+
+function _restoreDSN() {
+  if (!game.modules.get("dice-so-nice")?.active || _dsnEnabledBeforeManual === null) return;
+  try {
+    if (_dsnEnabledBeforeManual) {
+      const s = game.settings.get("dice-so-nice", "settings") ?? {};
+      game.settings.set("dice-so-nice", "settings", { ...s, enabled: true });
+    }
+  } catch (e) { /* DSN not ready */ }
+  _dsnEnabledBeforeManual = null;
 }
 
 // ============================================================================
@@ -219,6 +222,7 @@ export function applyDiceLinkFulfillment() {
   }
   
   CONFIG.Dice.fulfillment.defaultMethod = "dice-link";
+  _disableDSN();
   debugResolverState("apply_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
 }
 
@@ -237,5 +241,6 @@ export function removeDiceLinkFulfillment() {
   }
   
   CONFIG.Dice.fulfillment.defaultMethod = "";
+  _restoreDSN();
   debugResolverState("remove_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
 }
