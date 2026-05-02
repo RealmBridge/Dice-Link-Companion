@@ -11,7 +11,7 @@ import { getCollapsedSections } from "./settings.js";
 let streamOverlay = null;
 let streamImg = null;
 let hideTimeout = null;
-let rollingSound = null;
+let rollingAudio = null;
 
 /**
  * Display a single frame from the dice roll camera stream.
@@ -30,8 +30,12 @@ export function showDiceStreamFrame(frameB64) {
     if (streamOverlay) streamOverlay.style.opacity = '1';
   }
   // Start rolling sound on first frame of each roll
-  if (!rollingSound) {
-    rollingSound = foundry.audio.AudioHelper.play({ src: "sounds/dice.wav", volume: 0.8, loop: true, autoplay: true, channel: "interface" }, false);
+  if (!rollingAudio) {
+    const vol = game.settings.get("core", "globalInterfaceVolume") ?? 0.5;
+    rollingAudio = new Audio("sounds/dice.wav");
+    rollingAudio.loop = true;
+    rollingAudio.volume = vol;
+    rollingAudio.play().catch(() => {});
   }
 }
 
@@ -41,9 +45,10 @@ export function showDiceStreamFrame(frameB64) {
 export function endDiceStream() {
   if (hideTimeout) clearTimeout(hideTimeout);
   hideTimeout = setTimeout(_removeOverlay, 2000);
-  if (rollingSound) {
-    rollingSound.stop();
-    rollingSound = null;
+  if (rollingAudio) {
+    rollingAudio.pause();
+    rollingAudio.currentTime = 0;
+    rollingAudio = null;
   }
 }
 
