@@ -48,14 +48,14 @@ function _createOverlay() {
     transform: 'translate(-50%, -50%)',
     width: '60vw',
     height: '60vh',
-    background: 'rgba(0,0,0,0.85)',
-    border: '3px solid rgba(255,215,0,0.9)',
-    borderRadius: '12px',
+    background: 'transparent',
+    border: 'none',
     zIndex: '9999',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    pointerEvents: 'none',
     transition: 'opacity 0.5s ease'
   });
 
