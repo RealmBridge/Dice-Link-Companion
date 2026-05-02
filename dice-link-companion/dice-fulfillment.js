@@ -5,7 +5,7 @@
  *            Dialog mirroring handles hiding/mirroring the RollResolver UI
  */
 
-import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
+import { ASYNC_OPERATION_DELAY_MS, MODULE_ID } from "./constants.js";
 import { debugResolverState, debugFulfillment, debugError } from "./debug.js";
 import { getMirroredDialog } from "./state-management.js";
 
@@ -170,13 +170,30 @@ export async function submitMirroredDialog(userChoice) {
 
 /**
  * Suppress Dice So Nice animations for all players when a dice-link roll is submitted.
- * Sets the dice-so-nice skip flag on the chat message before it is created,
- * so DSN skips its 3D animation on every client that receives the message.
+ * DSN does not check message flags — it checks game.dice3d.messageHookDisabled.
+ * We set that flag in preCreateChatMessage (rolling client) and createChatMessage
+ * (all other clients), then reset it via setTimeout after DSN's handler has run.
  */
 export function setupDSNSuppression() {
+  // Rolling client: fires before createChatMessage.
+  // Mark the message with a DLC flag so other clients can identify it as a DLA roll.
   Hooks.on("preCreateChatMessage", (message) => {
     if (CONFIG.Dice.fulfillment.defaultMethod === "dice-link") {
-      message.updateSource({ flags: { "dice-so-nice": { skip: true } } });
+      message.updateSource({ flags: { [MODULE_ID]: { isDLARoll: true } } });
+      if (game.dice3d) {
+        game.dice3d.messageHookDisabled = true;
+        setTimeout(() => { if (game.dice3d) game.dice3d.messageHookDisabled = false; }, 0);
+      }
+    }
+  });
+
+  // All clients: fires when the message arrives (after preCreateChatMessage on rolling client,
+  // and directly on all other clients). DLC loads before DSN alphabetically so this
+  // handler always runs before DSN's createChatMessage handler.
+  Hooks.on("createChatMessage", (message) => {
+    if (message.getFlag(MODULE_ID, "isDLARoll") && game.dice3d) {
+      game.dice3d.messageHookDisabled = true;
+      setTimeout(() => { if (game.dice3d) game.dice3d.messageHookDisabled = false; }, 0);
     }
   });
 }
