@@ -275,11 +275,23 @@ Hooks.once("init", async () => {
  */
 Hooks.once("ready", async () => {
   try {
-    // Temporary audio diagnostic - intercept all Foundry audio calls
-    const _originalPlay = foundry.audio.AudioHelper.play.bind(foundry.audio.AudioHelper);
-    foundry.audio.AudioHelper.play = function(data, ...args) {
-      console.error("[DLC AUDIO] play called:", JSON.stringify(data));
-      return _originalPlay(data, ...args);
+    // Temporary audio diagnostic - intercept at browser level
+    const _origStart = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function(...args) {
+      const stack = new Error().stack.split('\n').slice(1, 4).join(' | ');
+      console.error("[DLC AUDIO] AudioBufferSourceNode.start:", stack);
+      return _origStart.apply(this, args);
+    };
+    const _origAudio = window.Audio;
+    window.Audio = function(src) {
+      console.error("[DLC AUDIO] new Audio() src:", src);
+      const a = new _origAudio(src);
+      const _origPlay = a.play.bind(a);
+      a.play = function(...args) {
+        console.error("[DLC AUDIO] Audio.play() src:", src);
+        return _origPlay(...args);
+      };
+      return a;
     };
 
     // Register per-user settings FIRST - wait for completion

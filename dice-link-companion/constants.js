@@ -11,7 +11,7 @@ export const DEBUG = false;
 
 // Module metadata
 export const MODULE_ID = "dice-link-companion";
-export const MODULE_VERSION = "1.0.9.32";
+export const MODULE_VERSION = "1.0.9.33";
 
 // Branding
 export const REALM_BRIDGE_URL = "https://realmbridge.co.uk";
