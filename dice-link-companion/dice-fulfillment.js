@@ -165,6 +165,23 @@ export async function submitMirroredDialog(userChoice) {
 }
 
 // ============================================================================
+// DSN SUPPRESSION
+// ============================================================================
+
+/**
+ * Suppress Dice So Nice animations for all players when a dice-link roll is submitted.
+ * Sets the dice-so-nice skip flag on the chat message before it is created,
+ * so DSN skips its 3D animation on every client that receives the message.
+ */
+export function setupDSNSuppression() {
+  Hooks.on("preCreateChatMessage", (message) => {
+    if (CONFIG.Dice.fulfillment.defaultMethod === "dice-link") {
+      message.updateSource({ "flags.dice-so-nice.skip": true });
+    }
+  });
+}
+
+// ============================================================================
 // FULFILLMENT MODE APPLICATION
 // ============================================================================
 

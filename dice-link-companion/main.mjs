@@ -95,6 +95,7 @@ import {
 
 import {
   setupDiceFulfillment,
+  setupDSNSuppression,
   executeDiceTrayRollManually,
   submitMirroredDialog,
   applyDiceLinkFulfillment,
@@ -288,6 +289,7 @@ Hooks.once("ready", async () => {
     setupChatButtonHandlers();
     setupDialogMirroring();
     setupDiceFulfillment();
+    setupDSNSuppression();
     
     // Register state listener for mirrored dialog changes
     onMirroredDialogChange((dialogData) => {
