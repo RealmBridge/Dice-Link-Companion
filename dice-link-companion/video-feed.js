@@ -20,7 +20,7 @@ let hideTimeout = null;
 export function showDiceStreamFrame(frameB64) {
   if (!streamOverlay) _createOverlay();
   if (streamImg) {
-    streamImg.src = 'data:image/jpeg;base64,' + frameB64;
+    streamImg.src = 'data:image/png;base64,' + frameB64;
   }
   // Cancel any pending hide so the overlay stays up while frames are arriving
   if (hideTimeout) {
