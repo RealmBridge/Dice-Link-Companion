@@ -275,6 +275,13 @@ Hooks.once("init", async () => {
  */
 Hooks.once("ready", async () => {
   try {
+    // Temporary audio diagnostic - intercept all Foundry audio calls
+    const _originalPlay = foundry.audio.AudioHelper.play.bind(foundry.audio.AudioHelper);
+    foundry.audio.AudioHelper.play = function(data, ...args) {
+      console.error("[DLC AUDIO] play called:", JSON.stringify(data));
+      return _originalPlay(data, ...args);
+    };
+
     // Register per-user settings FIRST - wait for completion
     registerPlayerModeSettings();
     
