@@ -6,6 +6,8 @@
 
 import { disableDSN, restoreDSN } from "./dice-fulfillment.js";
 
+let _savedDiceSound = null;
+
 /**
  * Apply manual dice mode using our custom dice-link fulfillment method.
  * This routes all dice rolls through our panel UI for player input.
@@ -27,6 +29,8 @@ async function applyManualDice() {
       }
     }
   }
+  _savedDiceSound = CONFIG.sounds.dice;
+  CONFIG.sounds.dice = null;
   disableDSN();
 }
 
@@ -69,6 +73,10 @@ async function applyDigitalDice() {
     }
   } catch (e) {
     // Setting may not exist or be inaccessible - that's OK
+  }
+  if (_savedDiceSound !== null) {
+    CONFIG.sounds.dice = _savedDiceSound;
+    _savedDiceSound = null;
   }
   restoreDSN();
 }
