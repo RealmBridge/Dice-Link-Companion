@@ -179,7 +179,7 @@ export function setupDSNSuppression() {
   // No hooks needed — suppression is tied to the mode switch.
 }
 
-function _disableDSN() {
+export function disableDSN() {
   console.error("[DLC DSN] _disableDSN called");
   if (!game.modules.get("dice-so-nice")?.active) {
     console.error("[DLC DSN] DSN module not active, skipping");
@@ -248,7 +248,7 @@ export function applyDiceLinkFulfillment() {
   }
   
   CONFIG.Dice.fulfillment.defaultMethod = "dice-link";
-  _disableDSN();
+  disableDSN();
   debugResolverState("apply_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
 }
 

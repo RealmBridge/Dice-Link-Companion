@@ -2,9 +2,9 @@
  * Mode Application Module - dice-link-companion
  * Handles applying manual/digital dice modes to the Foundry dice fulfillment system.
  * These functions control whether players use our custom panel UI or Foundry's digital dice.
- * 
- * Note: This module intentionally has no imports - it only uses Foundry's CONFIG API directly.
  */
+
+import { disableDSN, restoreDSN } from "./dice-fulfillment.js";
 
 /**
  * Apply manual dice mode using our custom dice-link fulfillment method.
@@ -27,6 +27,7 @@ async function applyManualDice() {
       }
     }
   }
+  disableDSN();
 }
 
 /**
@@ -69,6 +70,7 @@ async function applyDigitalDice() {
   } catch (e) {
     // Setting may not exist or be inaccessible - that's OK
   }
+  restoreDSN();
 }
 
 export {
