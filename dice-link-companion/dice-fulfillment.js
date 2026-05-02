@@ -182,20 +182,20 @@ export function setupDSNSuppression() {
 function _disableDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
   try {
-    const s = game.settings.get("dice-so-nice", "settings") ?? {};
+    const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
     _dsnEnabledBeforeManual = s.enabled !== false;
     if (_dsnEnabledBeforeManual) {
-      game.settings.set("dice-so-nice", "settings", { ...s, enabled: false });
+      game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: false });
     }
   } catch (e) { /* DSN not ready */ }
 }
 
-function _restoreDSN() {
+export function restoreDSN() {
   if (!game.modules.get("dice-so-nice")?.active || _dsnEnabledBeforeManual === null) return;
   try {
     if (_dsnEnabledBeforeManual) {
-      const s = game.settings.get("dice-so-nice", "settings") ?? {};
-      game.settings.set("dice-so-nice", "settings", { ...s, enabled: true });
+      const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
+      game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
     }
   } catch (e) { /* DSN not ready */ }
   _dsnEnabledBeforeManual = null;
@@ -241,6 +241,6 @@ export function removeDiceLinkFulfillment() {
   }
   
   CONFIG.Dice.fulfillment.defaultMethod = "";
-  _restoreDSN();
+  restoreDSN();
   debugResolverState("remove_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
 }

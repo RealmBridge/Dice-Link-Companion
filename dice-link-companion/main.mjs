@@ -96,6 +96,7 @@ import {
 import {
   setupDiceFulfillment,
   setupDSNSuppression,
+  restoreDSN,
   executeDiceTrayRollManually,
   submitMirroredDialog,
   applyDiceLinkFulfillment,
@@ -329,6 +330,9 @@ Hooks.once("ready", async () => {
     // Handle connection status changes
     onDLAConnectionChange((connected) => {
       debug("Dice Link App connection status:", connected ? "connected" : "disconnected");
+      if (!connected) {
+        restoreDSN();
+      }
       if (connected) {
         ui.notifications?.info("Connected to Dice Link App");
         // Send player modes data to DLA now that we're connected
