@@ -276,25 +276,6 @@ Hooks.once("init", async () => {
  */
 Hooks.once("ready", async () => {
   try {
-    // Temporary audio diagnostic - intercept at browser level
-    const _origStart = AudioBufferSourceNode.prototype.start;
-    AudioBufferSourceNode.prototype.start = function(...args) {
-      const stack = new Error().stack.split('\n').slice(1, 4).join(' | ');
-      console.error("[DLC AUDIO] AudioBufferSourceNode.start:", stack);
-      return _origStart.apply(this, args);
-    };
-    const _origAudio = window.Audio;
-    window.Audio = function(src) {
-      console.error("[DLC AUDIO] new Audio() src:", src);
-      const a = new _origAudio(src);
-      const _origPlay = a.play.bind(a);
-      a.play = function(...args) {
-        console.error("[DLC AUDIO] Audio.play() src:", src);
-        return _origPlay(...args);
-      };
-      return a;
-    };
-
     // Register per-user settings FIRST - wait for completion
     registerPlayerModeSettings();
     
@@ -582,25 +563,25 @@ Hooks.once("ready", async () => {
       }, 100);
     });
     
-    // Ensure DSN is enabled before applying initial mode — corrects any stuck
-    // disabled state left over from a previous session that ended in manual mode
-    ensureDSNEnabled();
-
-    // Apply initial dice mode based on settings
-    const globalOverride = getGlobalOverride();
-    
-    if (globalOverride === "forceAllManual") {
-      applyManualDice();
-    } else if (globalOverride === "forceAllDigital") {
-      applyDigitalDice();
-    } else {
-      const myMode = getPlayerMode();
-      if (myMode === "manual") {
-        applyManualDice();
+    // Delay mode application so Foundry finishes post-ready initialisation
+    // (diceConfiguration loading, other modules) before DLC applies its settings.
+    // Without this, Foundry resets CONFIG.Dice.fulfillment after DLC sets it.
+    setTimeout(async () => {
+      ensureDSNEnabled();
+      const globalOverride = getGlobalOverride();
+      if (globalOverride === "forceAllManual") {
+        await applyManualDice();
+      } else if (globalOverride === "forceAllDigital") {
+        await applyDigitalDice();
       } else {
-        applyDigitalDice();
+        const myMode = getPlayerMode();
+        if (myMode === "manual") {
+          await applyManualDice();
+        } else {
+          await applyDigitalDice();
+        }
       }
-    }
+    }, 500);
 
     // ========================================================================
     // PLAYER MODES: Send initial state to DLA and handle mode changes
