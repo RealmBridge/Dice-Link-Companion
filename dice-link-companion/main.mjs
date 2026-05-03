@@ -564,12 +564,9 @@ Hooks.once("ready", async () => {
     });
     
     // Diagnostic: log fulfillment state before applying mode
-    const _diagBefore = {
-      defaultMethod: CONFIG.Dice.fulfillment?.defaultMethod,
-      dice: JSON.stringify(CONFIG.Dice.fulfillment?.dice),
-      sounds_dice: CONFIG.sounds?.dice
-    };
-    console.error("[DLC DIAG] Before applyMode:", _diagBefore);
+    console.error("[DLC DIAG] Before - defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
+    console.error("[DLC DIAG] Before - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
+    console.error("[DLC DIAG] Before - sounds_dice:", JSON.stringify(CONFIG.sounds?.dice));
 
     ensureDSNEnabled();
     const globalOverride = getGlobalOverride();
@@ -588,18 +585,13 @@ Hooks.once("ready", async () => {
     }
 
     // Diagnostic: log state immediately after applying, and again 2s later
-    const _diagAfter = {
-      defaultMethod: CONFIG.Dice.fulfillment?.defaultMethod,
-      dice: JSON.stringify(CONFIG.Dice.fulfillment?.dice),
-      sounds_dice: CONFIG.sounds?.dice
-    };
-    console.error("[DLC DIAG] After applyMode (immediate):", _diagAfter);
+    console.error("[DLC DIAG] After (immediate) - defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
+    console.error("[DLC DIAG] After (immediate) - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
+    console.error("[DLC DIAG] After (immediate) - sounds_dice:", JSON.stringify(CONFIG.sounds?.dice));
     setTimeout(() => {
-      console.error("[DLC DIAG] After applyMode (2s later):", {
-        defaultMethod: CONFIG.Dice.fulfillment?.defaultMethod,
-        dice: JSON.stringify(CONFIG.Dice.fulfillment?.dice),
-        sounds_dice: CONFIG.sounds?.dice
-      });
+      console.error("[DLC DIAG] After (2s) - defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
+      console.error("[DLC DIAG] After (2s) - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
+      console.error("[DLC DIAG] After (2s) - sounds_dice:", JSON.stringify(CONFIG.sounds?.dice));
     }, 2000);
 
     // ========================================================================
