@@ -563,25 +563,44 @@ Hooks.once("ready", async () => {
       }, 100);
     });
     
-    // Delay mode application so Foundry finishes post-ready initialisation
-    // (diceConfiguration loading, other modules) before DLC applies its settings.
-    // Without this, Foundry resets CONFIG.Dice.fulfillment after DLC sets it.
-    setTimeout(async () => {
-      ensureDSNEnabled();
-      const globalOverride = getGlobalOverride();
-      if (globalOverride === "forceAllManual") {
-        await applyManualDice();
-      } else if (globalOverride === "forceAllDigital") {
-        await applyDigitalDice();
+    // Diagnostic: log fulfillment state before applying mode
+    const _diagBefore = {
+      defaultMethod: CONFIG.Dice.fulfillment?.defaultMethod,
+      dice: JSON.stringify(CONFIG.Dice.fulfillment?.dice),
+      sounds_dice: CONFIG.sounds?.dice
+    };
+    console.error("[DLC DIAG] Before applyMode:", _diagBefore);
+
+    ensureDSNEnabled();
+    const globalOverride = getGlobalOverride();
+    if (globalOverride === "forceAllManual") {
+      applyManualDice();
+    } else if (globalOverride === "forceAllDigital") {
+      applyDigitalDice();
+    } else {
+      const myMode = getPlayerMode();
+      console.error("[DLC DIAG] myMode:", myMode);
+      if (myMode === "manual") {
+        applyManualDice();
       } else {
-        const myMode = getPlayerMode();
-        if (myMode === "manual") {
-          await applyManualDice();
-        } else {
-          await applyDigitalDice();
-        }
+        applyDigitalDice();
       }
-    }, 500);
+    }
+
+    // Diagnostic: log state immediately after applying, and again 2s later
+    const _diagAfter = {
+      defaultMethod: CONFIG.Dice.fulfillment?.defaultMethod,
+      dice: JSON.stringify(CONFIG.Dice.fulfillment?.dice),
+      sounds_dice: CONFIG.sounds?.dice
+    };
+    console.error("[DLC DIAG] After applyMode (immediate):", _diagAfter);
+    setTimeout(() => {
+      console.error("[DLC DIAG] After applyMode (2s later):", {
+        defaultMethod: CONFIG.Dice.fulfillment?.defaultMethod,
+        dice: JSON.stringify(CONFIG.Dice.fulfillment?.dice),
+        sounds_dice: CONFIG.sounds?.dice
+      });
+    }, 2000);
 
     // ========================================================================
     // PLAYER MODES: Send initial state to DLA and handle mode changes
