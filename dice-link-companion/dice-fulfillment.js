@@ -201,7 +201,6 @@ export function disableDSN() {
   }
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    console.error("[DLC DSN] flag before change:", JSON.stringify(s));
     // Always mark DSN as needing restore — anyone using DLC with DSN installed
     // wants animations in digital mode, so we always re-enable on switch to digital.
     _dsnEnabledBeforeManual = true;
@@ -225,7 +224,6 @@ export function restoreDSN() {
   }
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    console.error("[DLC DSN] flag before restore:", JSON.stringify(s));
     game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
     console.error("[DLC DSN] DSN re-enabled");
   } catch (e) {

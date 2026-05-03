@@ -563,11 +563,6 @@ Hooks.once("ready", async () => {
       }, 100);
     });
     
-    // Diagnostic: log fulfillment state before applying mode
-    console.error("[DLC DIAG] Before - defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
-    console.error("[DLC DIAG] Before - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
-    console.error("[DLC DIAG] Before - sounds_dice:", JSON.stringify(CONFIG.sounds?.dice));
-
     ensureDSNEnabled();
     const globalOverride = getGlobalOverride();
     if (globalOverride === "forceAllManual") {
@@ -584,15 +579,7 @@ Hooks.once("ready", async () => {
       }
     }
 
-    // Diagnostic: log state immediately after applying, and again 2s later
-    console.error("[DLC DIAG] After (immediate) - defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
-    console.error("[DLC DIAG] After (immediate) - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
-    console.error("[DLC DIAG] After (immediate) - sounds_dice:", JSON.stringify(CONFIG.sounds?.dice));
-    setTimeout(() => {
-      console.error("[DLC DIAG] After (2s) - defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
-      console.error("[DLC DIAG] After (2s) - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
-      console.error("[DLC DIAG] After (2s) - sounds_dice:", JSON.stringify(CONFIG.sounds?.dice));
-    }, 2000);
+    console.error("[DLC DIAG] After startup apply - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
 
     // ========================================================================
     // PLAYER MODES: Send initial state to DLA and handle mode changes
