@@ -164,51 +164,19 @@ export async function submitMirroredDialog(userChoice) {
     }));
 
     if (targetButton?.element) {
-      // Find the form inside the dialog
-      const form = (element.tagName === 'FORM') ? element : element.querySelector('form');
-
-      debug("submitMirroredDialog: form search", JSON.stringify({
-        formFound: !!form,
-        formTagName: form?.tagName,
-        formId: form?.id,
-        buttonInsideForm: form ? form.contains(targetButton.element) : false
-      }));
-
-      let submitMethod = 'none';
-
-      if (form) {
-        try {
-          // form.requestSubmit(submitter) fires the form's submit event with the
-          // correct submitter button — bypasses dialog.open state requirement (v14 fix)
-          form.requestSubmit(targetButton.element);
-          submitMethod = 'requestSubmit';
-        } catch (e) {
-          // requestSubmit throws if submitter is not inside the form — fall back
-          debug("submitMirroredDialog: requestSubmit threw, falling back to click", e.message);
-          element.style.display = "block";
-          targetButton.element.click();
-          submitMethod = 'click-fallback';
-        }
-      } else {
-        // No form found — fall back to display + click
-        element.style.display = "block";
-        targetButton.element.click();
-        submitMethod = 'click-no-form';
-      }
+      // .click() triggers ApplicationV2's _onClickAction which sets advantage/disadvantage mode.
+      // form.requestSubmit() only fires 'submit' — _onClickAction never runs, mode never applied.
+      // visibility:hidden elements accept programmatic clicks; no need to reveal them first.
+      targetButton.element.click();
 
       await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
 
-      debug("submitMirroredDialog: after submit", JSON.stringify({
-        submitMethod,
+      debug("submitMirroredDialog: after click", JSON.stringify({
         isConnected: element.isConnected,
         open: element.open,
         display: getComputedStyle(element).display,
-        styleDisplay: element.style.display
+        visibility: element.style.visibility
       }));
-
-      if (element.style.display !== "none") {
-        element.style.display = "none";
-      }
     } else {
       debugError("Could not find target button:", userChoice.buttonLabel);
     }

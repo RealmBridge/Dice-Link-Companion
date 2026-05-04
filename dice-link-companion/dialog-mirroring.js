@@ -92,23 +92,26 @@ function handleDialogRender(app, html, data) {
     const elementToHide = htmlElement?.style ? htmlElement : html?.element;
     
     // Roll Resolution dialogs - mirror these too using the same pattern
-    if (title.includes("roll resolution") || title.includes("resolver") || 
+    if (title.includes("roll resolution") || title.includes("resolver") ||
         app.constructor?.name?.toLowerCase().includes("rollresolver")) {
       if (elementToHide?.style) {
-        elementToHide.style.display = "none";
+        elementToHide.style.visibility = "hidden";
+        elementToHide.style.pointerEvents = "none";
       }
       // Mirror the RollResolver to our panel
       mirrorRollResolverToPanel(app, html, data);
       return;
     }
-    
+
     // IMPORTANT: Clone the HTML BEFORE hiding the element
-    // Otherwise the cloned HTML will have display:none
+    // Otherwise the cloned HTML will inherit our hidden styles
     mirrorDialogToPanel(app, html, data);
-    
+
     // Hide the native dialog AFTER cloning
+    // visibility:hidden keeps the app active in Foundry's eyes; display:none triggers auto-close
     if (elementToHide?.style) {
-      elementToHide.style.display = "none";
+      elementToHide.style.visibility = "hidden";
+      elementToHide.style.pointerEvents = "none";
     }
   }
 }
@@ -535,7 +538,9 @@ function mirrorRollResolverToPanel(app, html, data) {
       setDLAPhase("diceRequested");
       
       // Hide resolver element since DLA will handle dice entry
-      element.style.display = "none";
+      // visibility:hidden keeps Foundry's app active; display:none triggers auto-close/deactivation
+      element.style.visibility = "hidden";
+      element.style.pointerEvents = "none";
       return; // DLA will handle dice entry, don't show DLC panel
     }
     
@@ -580,12 +585,7 @@ async function submitToFoundryResolver(values) {
       }
     }
     
-    // Make resolver visible temporarily so submit works
-    if (element?.style) {
-      element.style.display = "block";
-    }
-    
-    // Find and click the submit button
+    // Programmatic clicks work on visibility:hidden elements — no need to reveal first
     const submitButton = element.querySelector("button[type='submit'], button[data-action='submit'], .submit-button, button.default");
     if (submitButton) {
       submitButton.click();
@@ -596,13 +596,14 @@ async function submitToFoundryResolver(values) {
         form.requestSubmit();
       }
     }
-    
+
     // Small delay for processing
     await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // Hide again if still visible
-    if (element?.style && element.style.display !== "none") {
-      element.style.display = "none";
+
+    // Restore hidden state
+    if (element?.style) {
+      element.style.visibility = "hidden";
+      element.style.pointerEvents = "none";
     }
     
     // Clear state
@@ -636,10 +637,7 @@ export async function cancelFoundryResolver() {
     debug("Cancel button found:", !!cancelButton);
     
     if (cancelButton) {
-      // Make visible temporarily
-      if (element?.style) {
-        element.style.display = "block";
-      }
+      // Programmatic clicks work on visibility:hidden elements — no need to reveal first
       debug("Clicking cancel button");
       cancelButton.click();
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -648,10 +646,11 @@ export async function cancelFoundryResolver() {
       debug("No cancel button, closing app directly");
       await app.close();
     }
-    
+
     // Ensure it's hidden
     if (element?.style) {
-      element.style.display = "none";
+      element.style.visibility = "hidden";
+      element.style.pointerEvents = "none";
     }
     
     // Clear state
