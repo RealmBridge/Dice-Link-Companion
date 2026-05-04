@@ -571,15 +571,12 @@ Hooks.once("ready", async () => {
       applyDigitalDice();
     } else {
       const myMode = getPlayerMode();
-      console.error("[DLC DIAG] myMode:", myMode);
       if (myMode === "manual") {
         applyManualDice();
       } else {
         applyDigitalDice();
       }
     }
-
-    console.error("[DLC DIAG] After startup apply - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
 
     // ========================================================================
     // PLAYER MODES: Send initial state to DLA and handle mode changes

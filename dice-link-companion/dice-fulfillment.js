@@ -185,49 +185,35 @@ export function ensureDSNEnabled() {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
     if (s.enabled === false) {
       game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
-      console.error("[DLC DSN] DSN was disabled on startup — re-enabled");
     }
     _dsnEnabledBeforeManual = null;
   } catch (e) {
-    console.error("[DLC DSN] error in ensureDSNEnabled:", e);
+    debugError("error in ensureDSNEnabled:", e);
   }
 }
 
 export function disableDSN() {
-  console.error("[DLC DSN] _disableDSN called");
-  if (!game.modules.get("dice-so-nice")?.active) {
-    console.error("[DLC DSN] DSN module not active, skipping");
-    return;
-  }
+  if (!game.modules.get("dice-so-nice")?.active) return;
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    // Always mark DSN as needing restore — anyone using DLC with DSN installed
-    // wants animations in digital mode, so we always re-enable on switch to digital.
     _dsnEnabledBeforeManual = true;
     game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: false });
-    console.error("[DLC DSN] DSN disabled");
   } catch (e) {
-    console.error("[DLC DSN] error in _disableDSN:", e);
+    debugError("error in disableDSN:", e);
   }
 }
 
 export function restoreDSN() {
-  console.error("[DLC DSN] restoreDSN called, _dsnEnabledBeforeManual =", _dsnEnabledBeforeManual);
-  if (!game.modules.get("dice-so-nice")?.active) {
-    console.error("[DLC DSN] DSN module not active, skipping restore");
-    return;
-  }
+  if (!game.modules.get("dice-so-nice")?.active) return;
   if (!_dsnEnabledBeforeManual) {
-    console.error("[DLC DSN] nothing to restore");
     _dsnEnabledBeforeManual = null;
     return;
   }
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
     game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
-    console.error("[DLC DSN] DSN re-enabled");
   } catch (e) {
-    console.error("[DLC DSN] error in restoreDSN:", e);
+    debugError("error in restoreDSN:", e);
   }
   _dsnEnabledBeforeManual = null;
 }

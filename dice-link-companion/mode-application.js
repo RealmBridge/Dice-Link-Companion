@@ -79,7 +79,6 @@ async function applyDigitalDice() {
       await game.settings.set("core", "diceConfiguration", newConfig);
     }
   } catch (e) {}
-  console.error("[DLC DIAG] After diceConfig block - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
   if (_savedDiceSound !== null) {
     CONFIG.sounds.dice = _savedDiceSound;
     _savedDiceSound = null;
