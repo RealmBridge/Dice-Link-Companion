@@ -164,30 +164,48 @@ export async function submitMirroredDialog(userChoice) {
     }));
 
     if (targetButton?.element) {
-      // Make dialog visible temporarily so click works
-      element.style.display = "block";
+      // Find the form inside the dialog
+      const form = (element.tagName === 'FORM') ? element : element.querySelector('form');
 
-      debug("submitMirroredDialog: before click", JSON.stringify({
-        isConnected: element.isConnected,
-        open: element.open,
-        display: getComputedStyle(element).display
+      debug("submitMirroredDialog: form search", JSON.stringify({
+        formFound: !!form,
+        formTagName: form?.tagName,
+        formId: form?.id,
+        buttonInsideForm: form ? form.contains(targetButton.element) : false
       }));
 
-      // Click the button
-      targetButton.element.click();
+      let submitMethod = 'none';
 
-      // Small delay to let the click process
+      if (form) {
+        try {
+          // form.requestSubmit(submitter) fires the form's submit event with the
+          // correct submitter button — bypasses dialog.open state requirement (v14 fix)
+          form.requestSubmit(targetButton.element);
+          submitMethod = 'requestSubmit';
+        } catch (e) {
+          // requestSubmit throws if submitter is not inside the form — fall back
+          debug("submitMirroredDialog: requestSubmit threw, falling back to click", e.message);
+          element.style.display = "block";
+          targetButton.element.click();
+          submitMethod = 'click-fallback';
+        }
+      } else {
+        // No form found — fall back to display + click
+        element.style.display = "block";
+        targetButton.element.click();
+        submitMethod = 'click-no-form';
+      }
+
       await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
 
-      debug("submitMirroredDialog: after click", JSON.stringify({
+      debug("submitMirroredDialog: after submit", JSON.stringify({
+        submitMethod,
         isConnected: element.isConnected,
         open: element.open,
         display: getComputedStyle(element).display,
         styleDisplay: element.style.display
       }));
 
-      // The dialog should close itself after the button click
-      // But hide it just in case
       if (element.style.display !== "none") {
         element.style.display = "none";
       }

@@ -468,16 +468,13 @@ Hooks.once("ready", async () => {
     // We inject these values into Foundry's dice resolver.
     // ========================================================================
     setDiceResultCallback((rollId, results) => {
-      debug("Phase B: Dice results from DLA", { rollId, results });
-      
+      debug("Phase B: Dice results from DLA", JSON.stringify({ rollId, resultCount: results.length, results }));
+
       // Find the Foundry roll resolver in the DOM
-      // The resolver is a SEPARATE dialog from the roll configuration we mirrored
-      // It appears after clicking Advantage/Normal/Disadvantage button
       const resolver = document.querySelector('.roll-resolver, [data-application-part="resolver"], dialog.application');
-      
+
       if (!resolver) {
         debug("No roll resolver found in DOM for dice injection");
-        // Clear state anyway
         clearPendingDiceRequest();
         setMirroredDialog(null);
         setPendingRollRequest(null);
@@ -485,47 +482,59 @@ Hooks.once("ready", async () => {
         refreshPanel();
         return;
       }
-      
-      debug("Found resolver element", { 
-        tagName: resolver.tagName, 
+
+      debug("Found resolver element", JSON.stringify({
+        tagName: resolver.tagName,
         className: resolver.className,
-        innerHTML_length: resolver.innerHTML?.length 
-      });
-      
+        id: resolver.id,
+        display: getComputedStyle(resolver).display
+      }));
+
       // Find all dice input fields in the resolver
-      // Foundry's RollResolver uses various input patterns
       const allInputs = resolver.querySelectorAll('input[type="text"], input[type="number"], input:not([type])');
-      debug("Found inputs in resolver", { 
-        count: allInputs.length, 
-        inputs: Array.from(allInputs).map(i => ({ name: i.name, value: i.value, placeholder: i.placeholder }))
-      });
-      
+      debug("Found inputs in resolver", JSON.stringify({
+        count: allInputs.length,
+        inputs: Array.from(allInputs).map(i => ({
+          name: i.name,
+          value: i.value,
+          placeholder: i.placeholder,
+          type: i.type,
+          max: i.max
+        }))
+      }));
+
       // Inject dice values into the resolver inputs
       let resultIndex = 0;
       for (const input of allInputs) {
         // Skip inputs that already have values or are hidden
         if (input.value || input.type === 'hidden' || getComputedStyle(input).display === 'none') {
+          debug("Skipping input", JSON.stringify({ name: input.name, reason: input.value ? 'has-value' : input.type === 'hidden' ? 'hidden-type' : 'display-none' }));
           continue;
         }
-        
-        // Get next result value
+
         if (resultIndex < results.length) {
           const result = results[resultIndex];
           const value = result.value;
-          
           input.value = value;
           input.dispatchEvent(new Event("input", { bubbles: true }));
           input.dispatchEvent(new Event("change", { bubbles: true }));
-          debug("Injected dice value:", { value, inputName: input.name, inputIndex: resultIndex });
+          debug("Injected dice value", JSON.stringify({ value, inputName: input.name, inputIndex: resultIndex }));
           resultIndex++;
         }
       }
-      
-      debug("Injection complete", { injectedCount: resultIndex, totalResults: results.length });
-      
-      // After injecting all values, submit the resolver
-      // Small delay to let the UI update
+
+      debug("Injection complete", JSON.stringify({ injectedCount: resultIndex, totalResults: results.length }));
+
       setTimeout(() => {
+        // Log every button in the resolver so we know exactly what's available
+        const allButtons = Array.from(resolver.querySelectorAll('button'));
+        debug("Resolver all buttons", JSON.stringify(allButtons.map(b => ({
+          text: b.textContent?.trim(),
+          type: b.type,
+          dataAction: b.dataset?.action,
+          className: b.className
+        }))));
+
         // Look for submit button in resolver
         const submitBtn = resolver.querySelector(
           'button[type="submit"], ' +
@@ -534,31 +543,43 @@ Hooks.once("ready", async () => {
           '.dialog-button.submit, ' +
           'button.submit'
         );
-        
+
+        // Also check if resolver itself is a form (v14 pattern)
+        const resolverIsForm = resolver.tagName === 'FORM';
+        const innerForm = resolverIsForm ? null : resolver.querySelector('form');
+
+        debug("Resolver submit search", JSON.stringify({
+          submitBtnFound: !!submitBtn,
+          submitBtnText: submitBtn?.textContent?.trim(),
+          submitBtnType: submitBtn?.type,
+          submitBtnAction: submitBtn?.dataset?.action,
+          resolverIsForm,
+          innerFormFound: !!innerForm
+        }));
+
         if (submitBtn) {
-          debug("Clicking resolver submit button", { buttonText: submitBtn.textContent });
+          debug("Clicking resolver submit button", submitBtn.textContent?.trim());
           submitBtn.click();
         } else {
-          // Try form submit
-          const form = resolver.querySelector('form');
+          const form = innerForm || (resolverIsForm ? resolver : null);
           if (form) {
             debug("Submitting resolver form directly");
             form.requestSubmit();
           } else {
-            // Last resort - find any button that looks like submit
-            const anyBtn = Array.from(resolver.querySelectorAll('button')).find(btn => 
-              btn.textContent?.toLowerCase().includes('submit') || 
+            const anyBtn = Array.from(resolver.querySelectorAll('button')).find(btn =>
+              btn.textContent?.toLowerCase().includes('submit') ||
               btn.textContent?.toLowerCase().includes('ok') ||
               btn.textContent?.toLowerCase().includes('roll')
             );
             if (anyBtn) {
-              debug("Clicking fallback button", { buttonText: anyBtn.textContent });
+              debug("Clicking fallback button", anyBtn.textContent?.trim());
               anyBtn.click();
+            } else {
+              debug("No submit mechanism found in resolver — roll will not complete");
             }
           }
         }
-        
-        // Clear state
+
         clearPendingDiceRequest();
         setMirroredDialog(null);
         setPendingRollRequest(null);
