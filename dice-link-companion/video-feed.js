@@ -85,7 +85,7 @@ export function showDiceStreamFrame(frameB64) {
     rollingAudio = new Audio("sounds/dice.wav");
     rollingAudio.loop = false;
     rollingAudio.volume = vol;
-    rollingAudio.play().catch(() => {});
+    rollingAudio.play().catch(() => { rollingAudio = null; });
   }
 }
 
