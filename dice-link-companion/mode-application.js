@@ -23,12 +23,25 @@ async function applyManualDice() {
       const diceTypes = Object.keys(CONFIG.Dice.terms).filter(term => {
         return /^d\d+$/.test(term) && CONFIG.Dice.terms[term];
       });
-      
+
       for (const die of diceTypes) {
         CONFIG.Dice.fulfillment.dice[die] = "dice-link";
       }
     }
   }
+  // Write "manual" to every die in the persistent config — this triggers Foundry's
+  // onChange handler immediately, updating CONFIG.Dice.fulfillment.dice in memory
+  // and suppressing Foundry's digital dice sound without a page reload
+  try {
+    const diceConfig = game.settings.get("core", "diceConfiguration");
+    if (diceConfig && typeof diceConfig === "object") {
+      const newConfig = {};
+      for (const key of Object.keys(diceConfig)) {
+        newConfig[key] = "manual";
+      }
+      await game.settings.set("core", "diceConfiguration", newConfig);
+    }
+  } catch (e) {}
   _savedDiceSound = CONFIG.sounds.dice;
   CONFIG.sounds.dice = null;
   disableDSN();
@@ -55,25 +68,17 @@ async function applyDigitalDice() {
     }
   }
   
-  // Also try to reset the user's core dice configuration setting
+  // Reset every die in the persistent config back to Foundry's default (empty string)
   try {
     const diceConfig = game.settings.get("core", "diceConfiguration");
     if (diceConfig && typeof diceConfig === "object") {
-      let needsUpdate = false;
-      const newConfig = {...diceConfig};
-      for (const key of Object.keys(newConfig)) {
-        if (newConfig[key] === "manual" || newConfig[key] === "dice-link") {
-          newConfig[key] = "";
-          needsUpdate = true;
-        }
+      const newConfig = {};
+      for (const key of Object.keys(diceConfig)) {
+        newConfig[key] = "";
       }
-      if (needsUpdate) {
-        await game.settings.set("core", "diceConfiguration", newConfig);
-      }
+      await game.settings.set("core", "diceConfiguration", newConfig);
     }
-  } catch (e) {
-    // Setting may not exist or be inaccessible - that's OK
-  }
+  } catch (e) {}
   console.error("[DLC DIAG] After diceConfig block - dice:", JSON.stringify(CONFIG.Dice.fulfillment?.dice));
   if (_savedDiceSound !== null) {
     CONFIG.sounds.dice = _savedDiceSound;
