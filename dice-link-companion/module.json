@@ -2,11 +2,11 @@
   "id": "dice-link-companion",
   "title": "Dice Link Companion",
   "description": "When activated, overrides dice configuration to manual input. When deactivated, returns to digital roll.",
-  "version": "1.0.9.45",
+  "version": "1.0.9.46",
   "compatibility": {
     "minimum": "13",
     "verified": "13",
-    "maximum": "13.999"
+    "maximum": "14.999"
   },
   "authors": [
     {
