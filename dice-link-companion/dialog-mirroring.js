@@ -25,23 +25,18 @@ import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPending
  * Exported for use in main.mjs
  */
 export function setupDialogMirroring() {
-  // Hook into ApplicationV2 renders (dnd5e 4.x+ uses these)
-  Hooks.on("renderApplication", (app, html, data) => {
+  // Hook into legacy Application renders (v13+; renderApplication was removed in v14)
+  Hooks.on("renderApplicationV1", (app, html, data) => {
     handleDialogRender(app, html, data);
   });
-  
-  // Also try the legacy Dialog hook for backwards compatibility
-  Hooks.on("renderDialog", (app, html, data) => {
-    handleDialogRender(app, html, data);
-  });
-  
+
   // Try specific dnd5e roll configuration dialog hooks
   Hooks.on("renderRollConfigurationDialog", (app, html, data) => {
     handleDialogRender(app, html, data);
   });
-  
+
   // Hook to detect when applications close (including PopOut windows)
-  Hooks.on("closeApplication", (app, html) => {
+  Hooks.on("closeApplicationV1", (app, html) => {
     debug("Application closing:", app?.constructor?.name);
     const dialogRef = getMirroredDialog();
     if (dialogRef?.app === app) {

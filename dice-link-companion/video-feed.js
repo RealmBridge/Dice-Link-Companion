@@ -28,27 +28,46 @@ export function showDiceStreamFrame(frameB64) {
   if (!streamOverlay) _createOverlay();
 
   try {
-    const binary = atob(frameB64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    if (frameB64.startsWith('data:')) {
+      // Network frame (WebP data URL from socket) — draw via Image object
+      const img = new Image();
+      img.onload = () => {
+        if (streamCanvas.width !== img.naturalWidth || streamCanvas.height !== img.naturalHeight) {
+          streamCanvas.width = img.naturalWidth;
+          streamCanvas.height = img.naturalHeight;
+        }
+        streamCtx.drawImage(img, 0, 0);
+      };
+      img.onerror = (e) => debugError('[Camera] WebP frame decode error:', e);
+      if (_streamFrameCount === 0) {
+        _streamStartTime = performance.now();
+        debugCamera('stream-start', { source: 'network', format: 'webp' });
+      }
+      img.src = frameB64;
+    } else {
+      // Local frame (raw RGBA with 4-byte header from QWebChannel) — putImageData
+      const binary = atob(frameB64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const view = new DataView(bytes.buffer);
-    const w = view.getUint16(0);
-    const h = view.getUint16(2);
+      const view = new DataView(bytes.buffer);
+      const w = view.getUint16(0);
+      const h = view.getUint16(2);
 
-    if (_streamFrameCount === 0) {
-      _streamStartTime = performance.now();
-      debugCamera('stream-start', { width: w, height: h });
+      if (_streamFrameCount === 0) {
+        _streamStartTime = performance.now();
+        debugCamera('stream-start', { width: w, height: h, source: 'local' });
+      }
+
+      if (streamCanvas.width !== w || streamCanvas.height !== h) {
+        streamCanvas.width = w;
+        streamCanvas.height = h;
+      }
+
+      const pixelData = new Uint8ClampedArray(bytes.buffer, 4);
+      streamCtx.putImageData(new ImageData(pixelData, w, h), 0, 0);
     }
     _streamFrameCount++;
-
-    if (streamCanvas.width !== w || streamCanvas.height !== h) {
-      streamCanvas.width = w;
-      streamCanvas.height = h;
-    }
-
-    const pixelData = new Uint8ClampedArray(bytes.buffer, 4);
-    streamCtx.putImageData(new ImageData(pixelData, w, h), 0, 0);
   } catch (e) {
     debugError('[Camera] Frame decode error:', e);
   }
@@ -93,6 +112,17 @@ export function endDiceStream() {
     rollingAudio.currentTime = 0;
     rollingAudio = null;
   }
+}
+
+/**
+ * Re-encode the current stream canvas as a WebP data URL for network broadcast.
+ * Called immediately after showDiceStreamFrame draws locally, so the canvas is current.
+ * @param {number} quality - WebP quality 0–1 (default 0.9)
+ * @returns {string|null} WebP data URL, or null if no canvas exists yet
+ */
+export function getStreamCanvasWebP(quality = 0.9) {
+  if (!streamCanvas) return null;
+  return streamCanvas.toDataURL('image/webp', quality);
 }
 
 function _createOverlay() {

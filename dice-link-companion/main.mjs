@@ -124,7 +124,7 @@ import {
   setCameraStreamEndCallback
 } from "./qwebchannel-client.js";
 
-import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
+import { showDiceStreamFrame, endDiceStream, getStreamCanvasWebP } from "./video-feed.js";
 
 import {
   extractRollDataForDLA,
@@ -377,10 +377,14 @@ Hooks.once("ready", async () => {
     // and broadcasts to all other players via socket
     setCameraFrameCallback((frameB64) => {
       showDiceStreamFrame(frameB64);
-      game.socket.emit(`module.${MODULE_ID}`, {
-        action: "cameraFrame",
-        frameB64: frameB64
-      });
+      // Re-encode canvas to WebP before broadcasting — raw RGBA is too large for network
+      const networkFrame = getStreamCanvasWebP();
+      if (networkFrame) {
+        game.socket.emit(`module.${MODULE_ID}`, {
+          action: "cameraFrame",
+          frameB64: networkFrame
+        });
+      }
     });
 
     setCameraStreamEndCallback(() => {
