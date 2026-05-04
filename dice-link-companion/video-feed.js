@@ -74,9 +74,10 @@ function _createOverlay() {
 
   streamImg = document.createElement('img');
   Object.assign(streamImg.style, {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain'
+    maxWidth: '50vw',
+    maxHeight: '50vh',
+    width: 'auto',
+    height: 'auto'
   });
 
   streamOverlay.appendChild(streamImg);
