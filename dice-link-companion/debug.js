@@ -182,6 +182,17 @@ export function debugQWebChannel(event, data) {
 }
 
 /**
+ * Log camera stream events (stream start/end, frame decode errors, FPS)
+ * @param {string} event - Event type (e.g., "stream-start", "stream-end", "decode-error")
+ * @param {any} data - Associated data
+ */
+export function debugCamera(event, data) {
+  if (DEBUG_ENABLED) {
+    console.log("[Dice Link Camera]", event, data);
+  }
+}
+
+/**
  * Log element width measurements to debug stretching
  * @param {string} stage - Stage of measurement (e.g., "content area", "panel", "cloned dialog", "nav")
  * @param {HTMLElement} element - Element to measure
