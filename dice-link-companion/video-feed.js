@@ -82,11 +82,10 @@ export function showDiceStreamFrame(frameB64) {
   // Start rolling sound on first frame of each roll
   if (!rollingAudio) {
     const vol = game.settings.get("core", "globalInterfaceVolume") ?? 0.5;
-    try {
-      foundry.audio.AudioHelper.play({ src: "sounds/dice.wav", volume: vol, loop: false }, false)
-        .then(sound => { rollingAudio = sound; })
-        .catch(() => {});
-    } catch(e) {}
+    rollingAudio = new Audio("sounds/dice.wav");
+    rollingAudio.loop = false;
+    rollingAudio.volume = vol;
+    rollingAudio.play().catch(() => { rollingAudio = null; });
   }
 }
 
@@ -109,7 +108,8 @@ export function endDiceStream() {
   if (hideTimeout) clearTimeout(hideTimeout);
   hideTimeout = setTimeout(_removeOverlay, 2000);
   if (rollingAudio) {
-    try { rollingAudio.stop(); } catch(e) {}
+    rollingAudio.pause();
+    rollingAudio.currentTime = 0;
     rollingAudio = null;
   }
 }
