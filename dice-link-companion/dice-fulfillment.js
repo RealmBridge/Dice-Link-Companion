@@ -102,19 +102,19 @@ export async function submitMirroredDialog(userChoice) {
     return;
   }
   
-  debug("submitMirroredDialog: element found", {
+  debug("submitMirroredDialog: element found", JSON.stringify({
     tagName: element?.tagName,
     isConnected: element?.isConnected,
     display: element?.style?.display,
     open: element?.open,
     id: element?.id
-  });
-  debug("submitMirroredDialog: all buttons in formData", (formData?.buttons || []).map(b => ({
+  }));
+  debug("submitMirroredDialog: all buttons in formData", JSON.stringify((formData?.buttons || []).map(b => ({
     label: b.label,
     action: b.action,
     tagName: b.element?.tagName,
     type: b.element?.type
-  })));
+  }))));
   debug("submitMirroredDialog: looking for button label", userChoice.buttonLabel);
 
   try {
@@ -155,23 +155,23 @@ export async function submitMirroredDialog(userChoice) {
       );
     }
     
-    debug("submitMirroredDialog: targetButton result", {
+    debug("submitMirroredDialog: targetButton result", JSON.stringify({
       found: !!targetButton,
       label: targetButton?.label,
       tagName: targetButton?.element?.tagName,
       type: targetButton?.element?.type,
       dataAction: targetButton?.element?.dataset?.action
-    });
+    }));
 
     if (targetButton?.element) {
       // Make dialog visible temporarily so click works
       element.style.display = "block";
 
-      debug("submitMirroredDialog: before click", {
+      debug("submitMirroredDialog: before click", JSON.stringify({
         isConnected: element.isConnected,
         open: element.open,
         display: getComputedStyle(element).display
-      });
+      }));
 
       // Click the button
       targetButton.element.click();
@@ -179,12 +179,12 @@ export async function submitMirroredDialog(userChoice) {
       // Small delay to let the click process
       await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
 
-      debug("submitMirroredDialog: after click", {
+      debug("submitMirroredDialog: after click", JSON.stringify({
         isConnected: element.isConnected,
         open: element.open,
         display: getComputedStyle(element).display,
         styleDisplay: element.style.display
-      });
+      }));
 
       // The dialog should close itself after the button click
       // But hide it just in case

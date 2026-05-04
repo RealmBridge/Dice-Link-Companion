@@ -445,15 +445,15 @@ function mirrorRollResolverToPanel(app, html, data) {
     const diceInputs = element.querySelectorAll("input[type='number'], input[data-die]");
     const diceNeeded = [];
 
-    debug("mirrorRollResolverToPanel: element found", {
+    debug("mirrorRollResolverToPanel: element found", JSON.stringify({
       tagName: element.tagName,
       id: element.id,
       className: element.className,
       open: element.open
-    });
-    debug("mirrorRollResolverToPanel: all inputs in element", Array.from(
+    }));
+    debug("mirrorRollResolverToPanel: all inputs in element", JSON.stringify(Array.from(
       element.querySelectorAll("input")
-    ).map(i => ({ type: i.type, name: i.name, max: i.max, dataDie: i.dataset?.die, placeholder: i.placeholder })));
+    ).map(i => ({ type: i.type, name: i.name, max: i.max, dataDie: i.dataset?.die, placeholder: i.placeholder }))));
     debug("mirrorRollResolverToPanel: inputs matching selector", diceInputs.length);
 
     diceInputs.forEach((input, index) => {
@@ -733,12 +733,12 @@ function extractDialogFormData(app, html) {
     data.formula = formulaElement.textContent.trim();
   }
 
-  debug("extractDialogFormData: buttons captured", data.buttons.map(b => ({
+  debug("extractDialogFormData: buttons captured", JSON.stringify(data.buttons.map(b => ({
     label: b.label,
     action: b.action,
     tagName: b.element?.tagName,
     type: b.element?.type
-  })));
+  }))));
 
   return data;
 }
