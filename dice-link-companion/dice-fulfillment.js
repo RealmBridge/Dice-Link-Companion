@@ -6,7 +6,7 @@
  */
 
 import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
-import { debugResolverState, debugFulfillment, debugError } from "./debug.js";
+import { debug, debugResolverState, debugFulfillment, debugError } from "./debug.js";
 import { getMirroredDialog } from "./state-management.js";
 
 // ============================================================================
@@ -102,6 +102,21 @@ export async function submitMirroredDialog(userChoice) {
     return;
   }
   
+  debug("submitMirroredDialog: element found", {
+    tagName: element?.tagName,
+    isConnected: element?.isConnected,
+    display: element?.style?.display,
+    open: element?.open,
+    id: element?.id
+  });
+  debug("submitMirroredDialog: all buttons in formData", (formData?.buttons || []).map(b => ({
+    label: b.label,
+    action: b.action,
+    tagName: b.element?.tagName,
+    type: b.element?.type
+  })));
+  debug("submitMirroredDialog: looking for button label", userChoice.buttonLabel);
+
   try {
     // Apply user choices to form inputs in the hidden dialog
     if (userChoice.formValues) {
@@ -140,17 +155,37 @@ export async function submitMirroredDialog(userChoice) {
       );
     }
     
-    if (targetButton?.element) {
+    debug("submitMirroredDialog: targetButton result", {
+      found: !!targetButton,
+      label: targetButton?.label,
+      tagName: targetButton?.element?.tagName,
+      type: targetButton?.element?.type,
+      dataAction: targetButton?.element?.dataset?.action
+    });
 
+    if (targetButton?.element) {
       // Make dialog visible temporarily so click works
       element.style.display = "block";
-      
+
+      debug("submitMirroredDialog: before click", {
+        isConnected: element.isConnected,
+        open: element.open,
+        display: getComputedStyle(element).display
+      });
+
       // Click the button
       targetButton.element.click();
-      
+
       // Small delay to let the click process
       await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
-      
+
+      debug("submitMirroredDialog: after click", {
+        isConnected: element.isConnected,
+        open: element.open,
+        display: getComputedStyle(element).display,
+        styleDisplay: element.style.display
+      });
+
       // The dialog should close itself after the button click
       // But hide it just in case
       if (element.style.display !== "none") {

@@ -444,7 +444,18 @@ function mirrorRollResolverToPanel(app, html, data) {
     // Extract dice inputs from Foundry's resolver
     const diceInputs = element.querySelectorAll("input[type='number'], input[data-die]");
     const diceNeeded = [];
-    
+
+    debug("mirrorRollResolverToPanel: element found", {
+      tagName: element.tagName,
+      id: element.id,
+      className: element.className,
+      open: element.open
+    });
+    debug("mirrorRollResolverToPanel: all inputs in element", Array.from(
+      element.querySelectorAll("input")
+    ).map(i => ({ type: i.type, name: i.name, max: i.max, dataDie: i.dataset?.die, placeholder: i.placeholder })));
+    debug("mirrorRollResolverToPanel: inputs matching selector", diceInputs.length);
+
     diceInputs.forEach((input, index) => {
       const faces = parseInt(input.max) || parseInt(input.dataset?.faces) || 20;
       const name = input.name || input.id || `die-${index}`;
@@ -456,7 +467,7 @@ function mirrorRollResolverToPanel(app, html, data) {
         inputElement: input
       });
     });
-    
+
     if (diceNeeded.length === 0) {
       debug("mirrorRollResolverToPanel: No dice inputs found");
       return;
@@ -721,7 +732,14 @@ function extractDialogFormData(app, html) {
   if (formulaElement) {
     data.formula = formulaElement.textContent.trim();
   }
-  
+
+  debug("extractDialogFormData: buttons captured", data.buttons.map(b => ({
+    label: b.label,
+    action: b.action,
+    tagName: b.element?.tagName,
+    type: b.element?.type
+  })));
+
   return data;
 }
 
