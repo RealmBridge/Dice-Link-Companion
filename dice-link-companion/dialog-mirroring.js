@@ -27,31 +27,37 @@ import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPending
 export function setupDialogMirroring() {
   // Hook into legacy Application renders (v13+; renderApplication was removed in v14)
   Hooks.on("renderApplicationV1", (app, html, data) => {
+    debug("[DLC-HOOK] renderApplicationV1 fired", { appName: app?.constructor?.name, appId: app?.id });
     handleDialogRender(app, html, data);
   });
 
   // Try specific dnd5e roll configuration dialog hooks
   Hooks.on("renderRollConfigurationDialog", (app, html, data) => {
+    debug("[DLC-HOOK] renderRollConfigurationDialog fired", { appName: app?.constructor?.name, appId: app?.id });
     handleDialogRender(app, html, data);
   });
 
   // Hook to detect when applications close (including PopOut windows)
   Hooks.on("closeApplicationV1", (app, html) => {
-    debug("Application closing:", app?.constructor?.name);
+    debug("[DLC-HOOK] closeApplicationV1 fired", { appName: app?.constructor?.name, appId: app?.id });
     const dialogRef = getMirroredDialog();
     if (dialogRef?.app === app) {
       debugError("Mirrored roll dialog is closing!");
       debugState("Pending roll request at close", getPendingRollRequest());
-      // When the resolver dialog closes unexpectedly (e.g., PopOut window closed),
-      // this might be why rolls happen randomly
     }
     if (app?.element?.classList?.contains("dlc-dialog")) {
       debug("DLC dialog is closing");
     }
   });
-  
+
+  // Also listen for closeApplicationV2 to see if it fires instead in v14
+  Hooks.on("closeApplicationV2", (app) => {
+    debug("[DLC-HOOK] closeApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id });
+  });
+
   // Generic hook for any application render - cast wide net
   Hooks.on("renderApplicationV2", (app, html, data) => {
+    debug("[DLC-HOOK] renderApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id, htmlType: html?.constructor?.name });
     handleDialogRender(app, html, data);
   });
 }
@@ -82,9 +88,12 @@ function handleDialogRender(app, html, data) {
   if (!isUserInManualMode()) {
     return;
   }
-  
+
+  const isRoll = isRollDialog(app);
+  debug("[DLC-DIALOG] handleDialogRender", { appName: app?.constructor?.name, appId: app?.id, isRollDialog: isRoll });
+
   // Check if this is a roll dialog we should mirror
-  if (isRollDialog(app)) {
+  if (isRoll) {
     const title = (app.title || "").toLowerCase();
     
     // Hide the native dialog element
@@ -225,6 +234,13 @@ function mirrorDialogToPanel(app, html, data) {
       innerHTML_length: elementToClone.innerHTML?.length 
     });
     
+    // Log element state so we can see whether the duplicate-call guard is working
+    debug("[DLC-DUPLICATE-CHECK] element state when guard runs", {
+      display: elementToClone.style?.display || "(not set)",
+      visibility: elementToClone.style?.visibility || "(not set)",
+      tagName: elementToClone.tagName
+    });
+
     // Skip if element is already hidden - this means we've already processed it
     // The hook fires twice and the second time the element has display:none
     if (elementToClone.style?.display === 'none') {
@@ -710,6 +726,15 @@ function extractDialogFormData(app, html) {
   
   // Extract form inputs
   const inputs = element.querySelectorAll("input, select, textarea");
+  debug("[DLC-INPUTS] all form elements found in dialog", JSON.stringify(Array.from(inputs).map(i => ({
+    tag: i.tagName,
+    type: i.type,
+    name: i.name,
+    id: i.id,
+    value: i.value,
+    checked: i.checked,
+    optionCount: i.tagName === "SELECT" ? i.options?.length : undefined
+  }))));
   for (const input of inputs) {
     const name = input.name || input.id;
     if (name) {

@@ -5,6 +5,7 @@
  */
 
 import { disableDSN, restoreDSN } from "./dice-fulfillment.js";
+import { debug } from "./debug.js";
 
 /**
  * Apply manual dice mode using our custom dice-link fulfillment method.
@@ -32,6 +33,9 @@ async function applyManualDice() {
   // and suppressing Foundry's digital dice sound without a page reload
   try {
     const diceConfig = game.settings.get("core", "diceConfiguration");
+    debug("[DLC-DICE-CONFIG] diceConfiguration raw value on manual mode apply:", JSON.stringify(diceConfig));
+    debug("[DLC-DICE-CONFIG] CONFIG.Dice.fulfillment.dice keys:", JSON.stringify(Object.keys(CONFIG.Dice.fulfillment?.dice || {})));
+    debug("[DLC-DICE-CONFIG] CONFIG.Dice.fulfillment.defaultMethod:", CONFIG.Dice.fulfillment?.defaultMethod);
     if (diceConfig && typeof diceConfig === "object") {
       const newConfig = {};
       for (const key of Object.keys(diceConfig)) {

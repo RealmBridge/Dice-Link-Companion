@@ -705,6 +705,14 @@ export function extractRollDataForDLA(dialogData) {
     }
   }
 
+  debugWebSocket("[DLC-EXTRACT] formData.inputs received", JSON.stringify(
+    formData?.inputs
+      ? Object.entries(formData.inputs).map(([k, v]) => ({ name: k, type: v.type, value: v.value, hasOptions: !!v.options, optionCount: v.options?.length }))
+      : []
+  ));
+  debugWebSocket("[DLC-EXTRACT] configFields built for DLA", JSON.stringify(configFields));
+  debugWebSocket("[DLC-EXTRACT] buttons built for DLA", JSON.stringify(buttons));
+
   return {
     title: formData?.title || "Roll",
     subtitle: formData?.formula || "",

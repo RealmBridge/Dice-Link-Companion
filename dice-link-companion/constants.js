@@ -7,11 +7,11 @@
  */
 
 // Debug switch — set to false to silence all DLC console logging
-export const DEBUG = false;
+export const DEBUG = true;
 
 // Module metadata
 export const MODULE_ID = "dice-link-companion";
-export const MODULE_VERSION = "1.0.9.57";
+export const MODULE_VERSION = "1.0.9.58";
 
 // Branding
 export const REALM_BRIDGE_URL = "https://realmbridge.co.uk";
