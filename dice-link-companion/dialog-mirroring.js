@@ -37,22 +37,19 @@ export function setupDialogMirroring() {
     handleDialogRender(app, html, data);
   });
 
-  // Hook to detect when applications close (including PopOut windows)
-  Hooks.on("closeApplicationV1", (app, html) => {
-    debug("[DLC-HOOK] closeApplicationV1 fired", { appName: app?.constructor?.name, appId: app?.id });
+  // Hook to detect when applications close (v14 uses closeApplicationV2)
+  Hooks.on("closeApplicationV2", (app) => {
+    debug("[DLC-HOOK] closeApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id });
     const dialogRef = getMirroredDialog();
     if (dialogRef?.app === app) {
-      debugError("Mirrored roll dialog is closing!");
-      debugState("Pending roll request at close", getPendingRollRequest());
+      debugError("Mirrored roll dialog closed unexpectedly — clearing state");
+      setMirroredDialog(null);
+      setPendingRollRequest(null);
+      setDLAPhase(null);
     }
     if (app?.element?.classList?.contains("dlc-dialog")) {
       debug("DLC dialog is closing");
     }
-  });
-
-  // Also listen for closeApplicationV2 to see if it fires instead in v14
-  Hooks.on("closeApplicationV2", (app) => {
-    debug("[DLC-HOOK] closeApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id });
   });
 
   // Generic hook for any application render - cast wide net
@@ -242,8 +239,9 @@ function mirrorDialogToPanel(app, html, data) {
     });
 
     // Skip if element is already hidden - this means we've already processed it
-    // The hook fires twice and the second time the element has display:none
-    if (elementToClone.style?.display === 'none') {
+    // The hook fires twice (renderRollConfigurationDialog + renderApplicationV2) and
+    // the second time the element has visibility:hidden set by the first processing pass
+    if (elementToClone.style?.visibility === 'hidden') {
       debugCloning("Skipping clone - element already hidden (duplicate hook call)", {});
       return;
     }

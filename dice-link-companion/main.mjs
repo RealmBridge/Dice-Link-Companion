@@ -133,7 +133,15 @@ import {
 
 // Message sending wrappers for QWebChannel
 function sendRollRequest(data) {
-  sendMessage_Common({ type: "rollRequest", ...data });
+  sendMessage_Common({
+    type: "rollRequest",
+    title: data.title,
+    subtitle: data.subtitle,
+    formula: data.formula,
+    dice: data.dice,
+    config: { fields: data.configFields || [] },
+    buttons: data.buttons
+  });
 }
 
 function sendDiceRequest(data) {
