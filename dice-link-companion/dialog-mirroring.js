@@ -82,6 +82,13 @@ function isUserInManualMode() {
  * Handle dialog render - check if it's a roll dialog and mirror it
  */
 function handleDialogRender(app, html, data) {
+  const htmlEl = html instanceof jQuery ? html[0] : html;
+  debug("[DLC-HTML-DIAG] app=" + (app?.constructor?.name ?? "null") +
+    " nodeType=" + (htmlEl?.nodeType ?? "null") +
+    " htmlType=" + (htmlEl?.constructor?.name ?? "null") +
+    " inMainDoc=" + (htmlEl?.ownerDocument === document) +
+    " hasStyle=" + (htmlEl?.style !== undefined));
+
   if (!isUserInManualMode()) {
     return;
   }
