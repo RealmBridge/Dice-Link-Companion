@@ -283,6 +283,11 @@ Hooks.once("init", async () => {
  * Ready hook - set up UI and active features when game is ready
  */
 Hooks.once("ready", async () => {
+  if (window.opener) {
+    debug("Running in popout window — skipping DLA initialisation");
+    return;
+  }
+
   try {
     // Register per-user settings FIRST - wait for completion
     registerPlayerModeSettings();
