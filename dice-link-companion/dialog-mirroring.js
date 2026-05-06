@@ -221,9 +221,9 @@ function mirrorDialogToPanel(app, html, data) {
     } else if (html?.element) {
       elementToClone = html.element;
       debugCloning("HTML has .element property", { tagName: html.element?.tagName });
-    } else if (html instanceof HTMLElement) {
+    } else if (html?.nodeType === 1) {
       elementToClone = html;
-      debugCloning("HTML is HTMLElement", { tagName: html.tagName });
+      debugCloning("HTML is Element (nodeType=1)", { tagName: html.tagName });
     }
     
     if (!elementToClone) {
@@ -454,12 +454,12 @@ function mirrorRollResolverToPanel(app, html, data) {
       element = html[0];
     } else if (html?.element) {
       element = html.element;
-    } else if (html instanceof HTMLElement) {
+    } else if (html?.nodeType === 1) {
       element = html;
     } else {
       element = app?.element?.[0] || app?.element;
     }
-    
+
     if (!element) {
       debug("mirrorRollResolverToPanel: Could not find element");
       return;
@@ -697,7 +697,7 @@ function extractDialogFormData(app, html) {
     element = html[0];
   } else if (html?.element) {
     element = html.element;
-  } else if (html instanceof HTMLElement) {
+  } else if (html?.nodeType === 1) {
     element = html;
   } else {
     element = app?.element?.[0] || app?.element || document.querySelector(`[data-appid="${app?.appId}"]`);

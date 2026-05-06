@@ -283,8 +283,6 @@ Hooks.once("init", async () => {
  * Ready hook - set up UI and active features when game is ready
  */
 Hooks.once("ready", async () => {
-  debug(`[POPOUT-DETECT] opener=${window.opener !== null} href=${window.location.href} name='${window.name}' windows=${foundry?.applications?.detached?.windows?.size ?? 'N/A'}`);
-
   if (window.__dlaPopout) {
     debug("Running in DLA popout window — skipping DLA initialisation");
     return;
