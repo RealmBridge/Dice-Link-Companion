@@ -192,6 +192,9 @@ export async function submitMirroredDialog(userChoice) {
 // Saved DSN enabled state — set when entering manual mode, restored on exit.
 let _dsnEnabledBeforeManual = null;
 
+// Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
+let _savedDefaultMethod = null;
+
 /**
  * Called once at startup. DSN suppression is now handled directly in
  * applyDiceLinkFulfillment / removeDiceLinkFulfillment via the DSN enabled setting.
@@ -248,20 +251,20 @@ export function restoreDSN() {
  * Called when user is set to manual mode.
  */
 export function applyDiceLinkFulfillment() {
-  // Dynamically get available dice types from Foundry's configuration
-  // This adapts to any custom dice Foundry supports (d4, d6, d8, d10, d12, d20, d100, etc.)
+  // Save whatever Foundry/dnd5e had configured before we overwrite it
+  _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
+
   const diceTypes = Object.keys(CONFIG.Dice.terms).filter(term => {
-    // Filter to only dice terms (matches d4, d6, d8, d10, etc.)
     return /^d\d+$/.test(term) && CONFIG.Dice.terms[term];
   });
-  
+
   for (const die of diceTypes) {
     CONFIG.Dice.fulfillment.dice[die] = "dice-link";
   }
-  
+
   CONFIG.Dice.fulfillment.defaultMethod = "dice-link";
   disableDSN();
-  debugResolverState("apply_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
+  debugResolverState("apply_dice_link_fulfillment", { diceTypesCount: diceTypes.length, savedMethod: _savedDefaultMethod });
 }
 
 /**
@@ -269,16 +272,17 @@ export function applyDiceLinkFulfillment() {
  * Called when user switches to digital mode.
  */
 export function removeDiceLinkFulfillment() {
-  // Remove our fulfillment method from all dice
   const diceTypes = Object.keys(CONFIG.Dice.terms).filter(term => {
     return /^d\d+$/.test(term) && CONFIG.Dice.terms[term];
   });
-  
+
   for (const die of diceTypes) {
     delete CONFIG.Dice.fulfillment.dice[die];
   }
-  
-  CONFIG.Dice.fulfillment.defaultMethod = "";
+
+  // Restore whatever was configured before DLC wrote to this — don't just clear it
+  CONFIG.Dice.fulfillment.defaultMethod = _savedDefaultMethod ?? "";
+  _savedDefaultMethod = null;
   restoreDSN();
   debugResolverState("remove_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
 }
