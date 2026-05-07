@@ -71,6 +71,11 @@ import {
 } from "./dialog-mirroring.js";
 
 import {
+  setupChatLog,
+  sendInitialChatHistory
+} from "./chat-log.js";
+
+import {
   debug,
   debugState,
   debugError
@@ -294,6 +299,7 @@ Hooks.once("ready", async () => {
     // Setup UI and handlers (dialog mirroring hooks fire after this)
     setupChatButtonHandlers();
     setupDialogMirroring();
+    setupChatLog();
     setupDiceFulfillment();
     setupDSNSuppression();
     
@@ -321,6 +327,7 @@ Hooks.once("ready", async () => {
       if (connected) {
         debug("QWebChannel: Connected to DLA");
         ui.notifications?.info("Connected to Dice Link App");
+        sendInitialChatHistory();
       } else {
         debug("QWebChannel: DLA not detected - module running in standard Foundry mode");
         // Leave Foundry's fulfillment system exactly as it was — nothing to restore
@@ -339,6 +346,7 @@ Hooks.once("ready", async () => {
         if (isUserInManualMode()) {
           applyDiceLinkFulfillment();
         }
+        sendInitialChatHistory();
         setTimeout(() => {
           if (typeof sendPlayerModes === "function") {
             debug("Sending player modes after connection established");

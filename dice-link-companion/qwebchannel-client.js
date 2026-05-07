@@ -332,6 +332,8 @@ export function sendMessage(data) {
     } else if (data.type === "playerModesUpdate" && dlaInterface.receivePlayerModesUpdate) {
       debugQWebChannel("Calling receivePlayerModesUpdate...", {});
       dlaInterface.receivePlayerModesUpdate(jsonData);
+    } else if ((data.type === "chatMessage" || data.type === "chatInit") && dlaInterface.receiveChatMessage) {
+      dlaInterface.receiveChatMessage(jsonData);
     } else {
       debugError("Unknown message type or handler not available", {
         type: data.type,
