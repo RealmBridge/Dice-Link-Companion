@@ -67,8 +67,7 @@ import {
 } from "./mode-application.js";
 
 import {
-  setupDialogMirroring,
-  handleMirroredDialogChange
+  setupDialogMirroring
 } from "./dialog-mirroring.js";
 
 import {
@@ -78,12 +77,8 @@ import {
 } from "./debug.js";
 
 import {
-  generateDiceTrayHTML,
-  generateRollRequestSection,
-  generatePendingRollHTML,
   generateGMPanelContent,
-  generatePlayerPanelContent,
-  generateMirroredDialogHTML
+  generatePlayerPanelContent
 } from "./ui-templates.js";
 
 import {
@@ -117,12 +112,8 @@ import {
   setDiceResultCallback,
   setCancelCallback,
   setDiceTrayRollCallback,
-  setPlayerModeActionCallback,
-  setCameraFrameCallback,
-  setCameraStreamEndCallback
+  setPlayerModeActionCallback
 } from "./qwebchannel-client.js";
-
-import { showDiceStreamFrame, endDiceStream, getStreamCanvasWebP } from "./video-feed.js";
 
 import {
   extractRollDataForDLA,
@@ -307,22 +298,16 @@ Hooks.once("ready", async () => {
     // Register state listener for mirrored dialog changes
     onMirroredDialogChange((dialogData) => {
       if (dialogData && dialogData.data) {
-        handleMirroredDialogChange(dialogData, submitMirroredDialog, refreshPanel, openPanel);
-        
-        // Also send to Dice Link App if connected
-        if (getDLAConnectionStatus()) {
-          // Check if we're already in a DLA phase - don't send duplicate rollRequests
-          const currentPhase = getDLAPhase();
-          if (currentPhase && currentPhase !== null) {
-            debug("Skipping rollRequest - already in DLA phase:", currentPhase);
-            return;
-          }
-          
-          const rollData = extractRollDataForDLA(dialogData);
-          debug("Sending roll request to Dice Link App", rollData);
-          sendRollRequest(rollData);
-          setDLAPhase("rollSent");
+        setPendingRollRequest({});
+        const currentPhase = getDLAPhase();
+        if (currentPhase && currentPhase !== null) {
+          debug("Skipping rollRequest - already in DLA phase:", currentPhase);
+          return;
         }
+        const rollData = extractRollDataForDLA(dialogData);
+        debug("Sending roll request to Dice Link App", rollData);
+        sendRollRequest(rollData);
+        setDLAPhase("rollSent");
       }
     });
     
@@ -382,27 +367,6 @@ Hooks.once("ready", async () => {
         debug("Error executing dice tray roll:", e);
         ui.notifications?.error(`Dice roll error: ${e.message}`);
       }
-    });
-
-    // Camera stream — GM client receives frames from DLA, displays locally
-    // and broadcasts to all other players via socket
-    setCameraFrameCallback((frameB64) => {
-      showDiceStreamFrame(frameB64);
-      // Re-encode canvas to WebP before broadcasting — raw RGBA is too large for network
-      const networkFrame = getStreamCanvasWebP();
-      if (networkFrame) {
-        game.socket.emit(`module.${MODULE_ID}`, {
-          action: "cameraFrame",
-          frameB64: networkFrame
-        });
-      }
-    });
-
-    setCameraStreamEndCallback(() => {
-      endDiceStream();
-      game.socket.emit(`module.${MODULE_ID}`, {
-        action: "cameraStreamEnd"
-      });
     });
 
     // ========================================================================

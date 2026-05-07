@@ -3,7 +3,7 @@
  * Handles suppressing dnd5e roll dialogs and mirroring them to our panel UI
  */
 
-import { getPlayerMode, getGlobalOverride, getCollapsedSections, setCollapsedSections } from "./settings.js";
+import { getPlayerMode, getGlobalOverride } from "./settings.js";
 import { debug, debugError, debugState, debugResolverCancel, debugResolverClosure, debugCloning, debugButtonDetection } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
 
@@ -17,7 +17,7 @@ function sendDiceRequest(rollId, dice, formula, rollType) {
     rollType: rollType
   });
 }
-import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPendingRollRequest, getCurrentPanelDialog, setDLAPhase } from "./state-management.js";
+import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPendingRollRequest, setDLAPhase } from "./state-management.js";
 
 /**
  * Setup dialog mirroring - hook into ApplicationV2 and Dialog renders
@@ -83,6 +83,10 @@ function handleDialogRender(app, html, data) {
     " hasStyle=" + (htmlEl?.style !== undefined));
 
   if (!isUserInManualMode()) {
+    return;
+  }
+
+  if (!getConnectionStatus()) {
     return;
   }
 
@@ -489,8 +493,13 @@ function mirrorRollResolverToPanel(app, html, data) {
       debug("mirrorRollResolverToPanel: No dice inputs found");
       return;
     }
-    
-    // Store resolver reference and create pending roll request
+
+    // Read Phase A values (buttonClicked, dlaRollId) BEFORE overwriting pending roll state
+    const priorRoll = getPendingRollRequest();
+    const rollType = priorRoll?.buttonClicked || "normal";
+    const rollId = priorRoll?.dlaRollId || `dlc-${Date.now()}`;
+
+    // Store resolver reference
     setMirroredDialog({
       app,
       html,
@@ -499,75 +508,44 @@ function mirrorRollResolverToPanel(app, html, data) {
       diceNeeded,
       timestamp: Date.now()
     });
-    
-    // Create pending roll request for dice entry
+
+    // Preserve Phase A values alongside resolver state
     setPendingRollRequest({
-      title: "Enter Dice Results",
-      subtitle: `${diceNeeded.length} dice to enter`,
-      isFulfillment: true,
-      isAllAtOnce: true,
+      ...priorRoll,
       isRollResolver: true,
       diceNeeded: diceNeeded,
-      onComplete: async (values) => {
-        if (values === "cancel") {
-          await cancelFoundryResolver();
-        } else {
-          await submitToFoundryResolver(values);
-        }
-      }
     });
-    
-    // If connected to Dice Link App, send dice request (Phase B)
-    if (getConnectionStatus()) {
-      // Get the roll type from the pending request if available
-      const pendingRoll = getPendingRollRequest();
-      const rollType = pendingRoll?.buttonClicked || "normal";
-      const rollId = pendingRoll?.dlaRollId || `dlc-${Date.now()}`;
-      
-      // Build dice array for DLA
-      const diceForDLA = diceNeeded.map(d => ({
-        type: d.type,
-        count: 1
-      }));
-      
-      // Consolidate dice of same type
-      const consolidatedDice = [];
-      const diceMap = new Map();
-      for (const d of diceForDLA) {
-        if (diceMap.has(d.type)) {
-          diceMap.get(d.type).count++;
-        } else {
-          const entry = { type: d.type, count: 1 };
-          diceMap.set(d.type, entry);
-          consolidatedDice.push(entry);
-        }
+
+    // Build dice array for DLA
+    const diceForDLA = diceNeeded.map(d => ({
+      type: d.type,
+      count: 1
+    }));
+
+    // Consolidate dice of same type
+    const consolidatedDice = [];
+    const diceMap = new Map();
+    for (const d of diceForDLA) {
+      if (diceMap.has(d.type)) {
+        diceMap.get(d.type).count++;
+      } else {
+        const entry = { type: d.type, count: 1 };
+        diceMap.set(d.type, entry);
+        consolidatedDice.push(entry);
       }
-      
-      // Build formula string
-      const formulaParts = consolidatedDice.map(d => `${d.count}${d.type}`);
-      const formula = formulaParts.join(" + ");
-      
-      debug("Sending dice request to DLA (Phase B)", { rollId, rollType, formula, dice: consolidatedDice });
-      sendDiceRequest(rollId, consolidatedDice, formula, rollType);
-      setDLAPhase("diceRequested");
-      
-      // Hide resolver element since DLA will handle dice entry
-      // visibility:hidden keeps Foundry's app active; display:none triggers auto-close/deactivation
-      element.style.visibility = "hidden";
-      element.style.pointerEvents = "none";
-      return; // DLA will handle dice entry, don't show DLC panel
     }
-    
-    // Expand roll request section (only if DLA not connected)
-    const currentCollapsed = getCollapsedSections();
-    currentCollapsed.rollRequest = false;
-    setCollapsedSections(currentCollapsed);
-    
-    // Refresh panel to show dice entry UI (only if DLA not connected)
-    const panelDialog = getCurrentPanelDialog();
-    if (panelDialog && panelDialog.rendered) {
-      panelDialog.render(true);
-    }
+
+    // Build formula string
+    const formulaParts = consolidatedDice.map(d => `${d.count}${d.type}`);
+    const formula = formulaParts.join(" + ");
+
+    debug("Sending dice request to DLA (Phase B)", { rollId, rollType, formula, dice: consolidatedDice });
+    sendDiceRequest(rollId, consolidatedDice, formula, rollType);
+    setDLAPhase("diceRequested");
+
+    // Hide resolver — DLA handles dice entry; visibility:hidden keeps Foundry's app active
+    element.style.visibility = "hidden";
+    element.style.pointerEvents = "none";
     
   } catch (e) {
     debugError("Error mirroring RollResolver:", e);
@@ -765,63 +743,6 @@ function extractDialogFormData(app, html) {
   return data;
 }
 
-/**
- * Handle mirrored dialog state change - called via state listener when setMirroredDialog is invoked
- * This replaces the old window.diceLink.updatePanelWithMirroredDialog pattern
- * @param {Object} dialogData - The full dialog data object from setMirroredDialog
- * @param {Function} submitMirroredDialog - Function to submit the mirrored dialog (from dice-fulfillment.js)
- * @param {Function} refreshPanel - Function to refresh the panel UI
- * @param {Function} openPanel - Function to open the panel if not already open
- */
-export function handleMirroredDialogChange(dialogData, submitMirroredDialog, refreshPanel, openPanel) {
-  const { app, html, clonedHTML, data: formData } = dialogData;
-  
-  // Clear previous pending roll request
-  setPendingRollRequest(null);
-  
-  // Create new pending roll request with mirrored dialog data
-  setPendingRollRequest({
-    title: formData.title,
-    subtitle: formData.formula,
-    formula: formData.formula,
-    isMirroredDialog: true,
-    clonedHTML,  // Pass the cloned HTML string to preserve system dialog layout
-    mirrorData: formData,
-    onComplete: async (userChoice) => {
-      if (userChoice === "cancel") {
-        // Close the native dialog
-        const dialogRef = getMirroredDialog();
-        if (dialogRef?.app) {
-          dialogRef.app.close();
-        }
-        setMirroredDialog(null);
-        setPendingRollRequest(null);
-        refreshPanel();
-        return;
-      }
-      
-      // Apply user choices to the hidden dialog and submit it
-      await submitMirroredDialog(userChoice);
-      
-      setMirroredDialog(null);
-      setPendingRollRequest(null);
-      refreshPanel();
-    }
-  });
-  
-  // Expand the roll request section and refresh panel
-  const currentCollapsed = getCollapsedSections();
-  currentCollapsed.rollRequest = false;
-  setCollapsedSections(currentCollapsed);
-  
-  const panelDialog = getCurrentPanelDialog();
-  const panelIsOpen = panelDialog && panelDialog.rendered;
-  if (!panelIsOpen) {
-    openPanel();
-  } else {
-    refreshPanel();
-  }
-}
 
 /**
  * Replace system dice images with DLC blank dice icons
