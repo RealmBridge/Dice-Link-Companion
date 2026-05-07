@@ -93,6 +93,8 @@ import {
   setupDSNSuppression,
   ensureDSNEnabled,
   restoreDSN,
+  applyDiceLinkFulfillment,
+  removeDiceLinkFulfillment,
   executeDiceTrayRollManually,
   submitMirroredDialog
 } from "./dice-fulfillment.js";
@@ -329,11 +331,13 @@ Hooks.once("ready", async () => {
       debug("Dice Link App connection status:", connected ? "connected" : "disconnected");
       if (!connected) {
         restoreDSN();
+        removeDiceLinkFulfillment();
       }
       if (connected) {
         ui.notifications?.info("Connected to Dice Link App");
-        // Send player modes data to DLA now that we're connected
-        // (sendPlayerModes is defined later in this hook but hoisted)
+        if (isUserInManualMode()) {
+          applyDiceLinkFulfillment();
+        }
         setTimeout(() => {
           if (typeof sendPlayerModes === "function") {
             debug("Sending player modes after connection established");
