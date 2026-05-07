@@ -22,13 +22,20 @@ function makeAbsolute(html) {
 }
 
 /**
- * Rewrite relative url() references inside a CSS string to absolute URLs.
- * Uses the stylesheet's own href as the base so relative paths resolve correctly.
+ * Rewrite relative url() references and bare @import paths inside a CSS string
+ * to absolute URLs. Uses the stylesheet's own href as the base so relative paths
+ * resolve correctly against Foundry's origin rather than DLA's.
+ *
+ * Handles two syntaxes:
+ *   url("path") / url('path') / url(path)
+ *   @import "path" / @import 'path'
  */
 function makeStyleUrlsAbsolute(cssText, cssHref) {
   try {
     const base = new URL(cssHref);
-    return cssText.replace(
+
+    // Rewrite url() references
+    let result = cssText.replace(
       /url\(\s*(['"]?)(?!https?:\/\/|data:|#)([^'")\s]+)\1\s*\)/g,
       (match, quote, path) => {
         try {
@@ -39,6 +46,21 @@ function makeStyleUrlsAbsolute(cssText, cssHref) {
         }
       }
     );
+
+    // Rewrite bare @import "path" / @import 'path' (without url() wrapper)
+    result = result.replace(
+      /@import\s+(['"])(?!https?:\/\/|data:)([^'"]+)\1/g,
+      (match, quote, path) => {
+        try {
+          const absolute = new URL(path, base).href;
+          return `@import ${quote}${absolute}${quote}`;
+        } catch {
+          return match;
+        }
+      }
+    );
+
+    return result;
   } catch {
     return cssText;
   }
@@ -103,19 +125,27 @@ export async function sendInitialChatHistory() {
 
   const styleTexts = [...fetchedStyleTexts, ...inlineStyleTexts];
 
-  // Existing messages — batched into one payload
-  const chatLog = document.querySelector("ol.chat-log");
-  const messages = chatLog
-    ? Array.from(chatLog.querySelectorAll("li.chat-message")).map(msg => makeAbsolute(msg.outerHTML))
-    : [];
+  // Existing messages — batched into one payload.
+  // Foundry may not have rendered messages to the DOM yet when this function is
+  // called during the ready hook, so retry once after 2 seconds if the list is empty.
+  async function collectAndSend(styleTexts, externalUrls, origin) {
+    const chatLog = document.querySelector("ol.chat-log");
+    const messages = chatLog
+      ? Array.from(chatLog.querySelectorAll("li.chat-message")).map(msg => makeAbsolute(msg.outerHTML))
+      : [];
 
-  debug(`Chat log: sending ${messages.length} messages, ${styleTexts.length} inline styles, ${externalUrls.length} external style URLs`);
+    if (messages.length === 0 && chatLog) {
+      debug("Chat log: 0 messages found, retrying in 2s...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const retryMessages = Array.from(chatLog.querySelectorAll("li.chat-message")).map(msg => makeAbsolute(msg.outerHTML));
+      debug(`Chat log: sending ${retryMessages.length} messages after retry, ${styleTexts.length} inline styles, ${externalUrls.length} external style URLs`);
+      sendMessage({ type: "chatInit", foundryUrl: origin, styleUrls: externalUrls, styleTexts, messages: retryMessages });
+      return;
+    }
 
-  sendMessage({
-    type: "chatInit",
-    foundryUrl: origin,
-    styleUrls: externalUrls,
-    styleTexts,
-    messages
-  });
+    debug(`Chat log: sending ${messages.length} messages, ${styleTexts.length} inline styles, ${externalUrls.length} external style URLs`);
+    sendMessage({ type: "chatInit", foundryUrl: origin, styleUrls: externalUrls, styleTexts, messages });
+  }
+
+  await collectAndSend(styleTexts, externalUrls, origin);
 }
