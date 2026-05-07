@@ -323,6 +323,7 @@ Hooks.once("ready", async () => {
         ui.notifications?.info("Connected to Dice Link App");
       } else {
         debug("QWebChannel: DLA not detected - module running in standard Foundry mode");
+        removeDiceLinkFulfillment();
       }
     });
     
