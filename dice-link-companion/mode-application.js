@@ -4,31 +4,24 @@
  * These functions control whether players use our custom panel UI or Foundry's digital dice.
  */
 
-import { disableDSN, restoreDSN, applyDiceLinkFulfillment, removeDiceLinkFulfillment } from "./dice-fulfillment.js";
-import { getConnectionStatus } from "./qwebchannel-client.js";
+import { applyDiceLinkFulfillment, removeDiceLinkFulfillment } from "./dice-fulfillment.js";
 
 /**
  * Apply manual dice mode.
- * Only touches the fulfillment system when DLA is connected — otherwise Foundry
- * handles manual entry naturally and we must not overwrite its configuration.
+ * Always sets dice-link fulfillment so Foundry shows the RollResolver.
+ * When DLA is connected, DLA fills values; when not, readOnly is stripped in
+ * dialog-mirroring.js so the user can type directly.
  */
 async function applyManualDice() {
-  disableDSN();
-  if (getConnectionStatus()) {
-    applyDiceLinkFulfillment();
-  }
+  applyDiceLinkFulfillment();
 }
 
 /**
  * Apply digital dice mode.
- * Only touches the fulfillment system when DLA is connected — otherwise there
- * is nothing DLC wrote and nothing to restore.
+ * Always restores whatever fulfillment method was active before DLC wrote to it.
  */
 async function applyDigitalDice() {
-  restoreDSN();
-  if (getConnectionStatus()) {
-    removeDiceLinkFulfillment();
-  }
+  removeDiceLinkFulfillment();
 }
 
 export {

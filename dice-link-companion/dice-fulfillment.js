@@ -251,8 +251,11 @@ export function restoreDSN() {
  * Called when user is set to manual mode.
  */
 export function applyDiceLinkFulfillment() {
-  // Save whatever Foundry/dnd5e had configured before we overwrite it
-  _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
+  // Only save the original on first call — guards against double-calls overwriting the
+  // real original with "dice-link" (which would then be "restored" to "dice-link" on exit)
+  if (_savedDefaultMethod === null) {
+    _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
+  }
 
   const diceTypes = Object.keys(CONFIG.Dice.terms).filter(term => {
     return /^d\d+$/.test(term) && CONFIG.Dice.terms[term];

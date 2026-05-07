@@ -87,6 +87,22 @@ function handleDialogRender(app, html, data) {
   }
 
   if (!getConnectionStatus()) {
+    // DLA not connected — if Foundry's RollResolver is showing, strip readOnly so the
+    // user can type their physical dice values directly into Foundry's own inputs
+    if (isRollDialog(app)) {
+      const title = (app.title || "").toLowerCase();
+      const isResolver = title.includes("roll resolution") || title.includes("resolver") ||
+        app.constructor?.name?.toLowerCase().includes("rollresolver");
+      if (isResolver) {
+        const element = html instanceof jQuery ? html[0] : (html?.element || html);
+        if (element) {
+          element.querySelectorAll('input[type="number"]').forEach(input => {
+            input.readOnly = false;
+            input.removeAttribute("readonly");
+          });
+        }
+      }
+    }
     return;
   }
 
