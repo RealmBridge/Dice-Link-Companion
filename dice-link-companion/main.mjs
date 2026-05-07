@@ -570,18 +570,13 @@ Hooks.once("ready", async () => {
     
     ensureDSNEnabled();
     const globalOverride = getGlobalOverride();
-    if (globalOverride === "forceAllManual") {
-      applyManualDice();
-    } else if (globalOverride === "forceAllDigital") {
+    if (globalOverride === "forceAllDigital") {
       applyDigitalDice();
-    } else {
-      const myMode = getPlayerMode();
-      if (myMode === "manual") {
-        applyManualDice();
-      } else {
-        applyDigitalDice();
-      }
     }
+    // Dice-link fulfillment is only activated once DLA connects (see onDLAConnectionChange).
+    // If DLA is not running, connectToDLA() polls for up to 10 seconds before giving up —
+    // applying fulfillment at startup would leave it active during that entire window.
+    // Keeping it off until connection is confirmed means rolls always work natively without DLA.
 
     // ========================================================================
     // PLAYER MODES: Send initial state to DLA and handle mode changes
