@@ -622,19 +622,25 @@ Hooks.once("ready", async () => {
     
     // Function to gather and send player modes to DLA
     const sendPlayerModes = () => {
+      const globalOverride = getGlobalOverride();
       const players = [];
       for (const user of game.users) {
-        // Include everyone (including GM) so all users can see each other's modes
-        // Add isSelf flag so DLA knows which player is the logged-in user
+        let effectiveMode;
+        if (globalOverride === "forceAllManual") {
+          effectiveMode = "manual";
+        } else if (globalOverride === "forceAllDigital") {
+          effectiveMode = "digital";
+        } else {
+          effectiveMode = getPlayerMode(user.id);
+        }
         players.push({
           id: user.id,
           name: user.name,
-          mode: getPlayerMode(user.id),
+          mode: effectiveMode,
           isGM: user.isGM,
           isSelf: user.id === game.user?.id
         });
       }
-      const globalOverride = getGlobalOverride();
       // Only include pending requests - DLA will only show these to GMs
       const pending = getPendingRequests();
       
