@@ -91,7 +91,7 @@ export async function submitMirroredDialog(userChoice) {
     element = html[0];
   } else if (html?.element) {
     element = html.element;
-  } else if (html instanceof HTMLElement) {
+  } else if (html?.nodeType === 1) {
     element = html;
   } else {
     element = formData.element;

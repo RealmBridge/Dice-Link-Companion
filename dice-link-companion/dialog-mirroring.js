@@ -6,7 +6,6 @@
 import { getPlayerMode, getGlobalOverride, getCollapsedSections, setCollapsedSections } from "./settings.js";
 import { debug, debugError, debugState, debugResolverCancel, debugResolverClosure, debugCloning, debugButtonDetection } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
-import { getPendingDiceRequest } from "./websocket-client.js";
 
 // Wrapper for sendDiceRequest to use QWebChannel
 function sendDiceRequest(rollId, dice, formula, rollType) {
@@ -25,12 +24,6 @@ import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPending
  * Exported for use in main.mjs
  */
 export function setupDialogMirroring() {
-  // Hook into legacy Application renders (v13+; renderApplication was removed in v14)
-  Hooks.on("renderApplicationV1", (app, html, data) => {
-    debug("[DLC-HOOK] renderApplicationV1 fired", { appName: app?.constructor?.name, appId: app?.id });
-    handleDialogRender(app, html, data);
-  });
-
   // Try specific dnd5e roll configuration dialog hooks
   Hooks.on("renderRollConfigurationDialog", (app, html, data) => {
     debug("[DLC-HOOK] renderRollConfigurationDialog fired", { appName: app?.constructor?.name, appId: app?.id });
@@ -42,7 +35,7 @@ export function setupDialogMirroring() {
     debug("[DLC-HOOK] closeApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id });
     const dialogRef = getMirroredDialog();
     if (dialogRef?.app === app) {
-      debugError("Mirrored roll dialog closed unexpectedly — clearing state");
+      debug("Mirrored roll dialog closed — clearing state");
       setMirroredDialog(null);
       setPendingRollRequest(null);
       setDLAPhase(null);

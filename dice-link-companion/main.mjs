@@ -99,9 +99,7 @@ import {
   ensureDSNEnabled,
   restoreDSN,
   executeDiceTrayRollManually,
-  submitMirroredDialog,
-  applyDiceLinkFulfillment,
-  removeDiceLinkFulfillment
+  submitMirroredDialog
 } from "./dice-fulfillment.js";
 
 import {
@@ -148,8 +146,13 @@ function sendDiceRequest(data) {
   sendMessage_Common({ type: "diceRequest", ...data });
 }
 
-function sendPlayerModesUpdate(data) {
-  sendMessage_Common({ type: "playerModesUpdate", ...data });
+function sendPlayerModesUpdate(players, globalOverride, pendingRequests) {
+  sendMessage_Common({
+    type: "playerModesUpdate",
+    players: players || [],
+    globalOverride: globalOverride || null,
+    pendingRequests: pendingRequests || []
+  });
 }
 
 // ============================================================================
@@ -283,11 +286,6 @@ Hooks.once("init", async () => {
  * Ready hook - set up UI and active features when game is ready
  */
 Hooks.once("ready", async () => {
-  if (window.__dlaPopout) {
-    debug("Running in DLA popout window — skipping DLA initialisation");
-    return;
-  }
-
   try {
     // Register per-user settings FIRST - wait for completion
     registerPlayerModeSettings();
