@@ -193,6 +193,21 @@ export function debugCamera(event, data) {
 }
 
 /**
+ * Log chat log events — stylesheet collection, CSS rewriting, message collection, hook firing
+ * @param {string} event - Short label for what is happening
+ * @param {any} data - Associated data (counts, URLs, flags, etc.)
+ */
+export function debugChatLog(event, data) {
+  if (DEBUG_ENABLED) {
+    if (data !== undefined) {
+      console.log("[Dice Link Chat Log]", event, data);
+    } else {
+      console.log("[Dice Link Chat Log]", event);
+    }
+  }
+}
+
+/**
  * Log element width measurements to debug stretching
  * @param {string} stage - Stage of measurement (e.g., "content area", "panel", "cloned dialog", "nav")
  * @param {HTMLElement} element - Element to measure
