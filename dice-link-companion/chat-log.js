@@ -18,6 +18,25 @@ const _sentMessageIds = new Set();
 let _connectionTime = 0;
 
 /**
+ * Return the tag+class skeleton of an element tree as a plain string.
+ * Used for CSS diagnostics — logs structure without any text content so the
+ * full nesting and class names are readable in the CMD prompt.
+ * TEMPORARY — remove once chat card CSS is correct.
+ */
+function getStructure(el, depth) {
+  depth = depth || 0;
+  if (!el || !el.tagName) return "";
+  const indent = "  ".repeat(depth);
+  const classes = el.className ? "." + String(el.className).trim().replace(/\s+/g, ".") : "";
+  let result = indent + "<" + el.tagName.toLowerCase() + classes + ">";
+  for (let i = 0; i < el.children.length; i++) {
+    const child = getStructure(el.children[i], depth + 1);
+    if (child) result += "\n" + child;
+  }
+  return result;
+}
+
+/**
  * Rewrite relative src/href attributes to absolute URLs using the Foundry origin.
  * Prevents broken avatar images and asset links when HTML is rendered in DLA.
  */
@@ -61,7 +80,7 @@ export function setupChatLog() {
     }
 
     _sentMessageIds.add(message.id);
-    debugChatLog("renderChatMessageHTML: sending", message.id);
+    debugChatLog("MSG STRUCTURE [" + message.id + "]\n" + getStructure(li));
     sendMessage({
       type: "chatMessage",
       messageId: message.id,
