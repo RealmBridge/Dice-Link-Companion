@@ -327,7 +327,6 @@ Hooks.once("ready", async () => {
       if (connected) {
         debug("QWebChannel: Connected to DLA");
         ui.notifications?.info("Connected to Dice Link App");
-        sendInitialChatHistory();
       } else {
         debug("QWebChannel: DLA not detected - module running in standard Foundry mode");
         // Leave Foundry's fulfillment system exactly as it was — nothing to restore

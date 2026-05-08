@@ -10,6 +10,11 @@ import { debug, debugChatLog } from "./debug.js";
 // Expected: exactly 1. If > 1, the double-call bug is still present.
 let _sendInitialChatHistoryCallCount = 0;
 
+// Buffer populated by the renderChatLog hook when the chat log first renders.
+// null = hook has not fired yet. [] = fired but no messages. [...] = captured messages.
+// Used as fallback for history when the DOM is empty at connection time.
+let _chatLogHistoryBuffer = null;
+
 /**
  * Rewrite relative src/href attributes to absolute URLs using the Foundry origin.
  * Prevents broken image and link URLs when HTML is rendered in the DLA panel.
@@ -75,6 +80,22 @@ function makeStyleUrlsAbsolute(cssText, cssHref) {
  * Called once during module initialisation.
  */
 export function setupChatLog() {
+  // Capture the full rendered chat log the first time it appears in the DOM.
+  // renderChatLog fires during game setup, after messages have been rendered into the
+  // ol.chat-log element. This is earlier and more reliable than querying the DOM from
+  // the ready hook (where the chat log hasn't rendered yet).
+  Hooks.once("renderChatLog", (app, html) => {
+    const root = html instanceof HTMLElement ? html : (html && html[0]);
+    if (!root) {
+      debugChatLog("renderChatLog: html argument was not an HTMLElement, buffer not populated");
+      return;
+    }
+    const messages = Array.from(root.querySelectorAll("li.chat-message"))
+      .map(li => makeAbsolute(li.outerHTML));
+    debugChatLog("renderChatLog: captured chat history", messages.length);
+    _chatLogHistoryBuffer = messages;
+  });
+
   Hooks.on("renderChatMessageHTML", (message, element) => {
     const connected = getConnectionStatus();
     debugChatLog("renderChatMessageHTML hook fired", {
@@ -180,19 +201,22 @@ export async function sendInitialChatHistory() {
     failed: fetchResults.filter(r => r.status !== "fulfilled" || !r.value).length
   });
 
-  // Inline <style> block content — NOTE: these are NOT run through makeStyleUrlsAbsolute
+  // Inline <style> block content — processed through makeStyleUrlsAbsolute.
+  // Inline styles have no file location so paths are resolved from the document root
+  // (origin + "/"). Without this, @import paths remain relative to DLA's origin → 404s.
   const inlineStyleElements = Array.from(document.querySelectorAll("style"));
   debugChatLog("inline <style> elements found", inlineStyleElements.length);
   const inlineStyleTexts = inlineStyleElements
     .map((s, i) => {
-      const text = s.textContent || "";
-      const imports = (text.match(/@import/g) || []).length;
+      const rawText = s.textContent || "";
+      const text = makeStyleUrlsAbsolute(rawText, origin + "/");
+      const importsBefore = (rawText.match(/@import/g) || []).length;
+      const importsAfter = (text.match(/@import\s+['"](?!https?:\/\/)/g) || []).length;
       debugChatLog(`inline style[${i}]`, {
-        bytes: text.length,
-        atImports: imports,
-        note: imports > 0
-          ? "WARNING: contains @imports but NOT rewritten (sent raw — these will 404 on DLA)"
-          : "ok"
+        bytes: rawText.length,
+        atImportsBefore: importsBefore,
+        atImportsStillRelativeAfter: importsAfter,
+        note: importsAfter > 0 ? "WARNING: some @imports still relative after rewrite" : "ok"
       });
       return text;
     })
@@ -205,62 +229,36 @@ export async function sendInitialChatHistory() {
     total: styleTexts.length
   });
 
-  // Existing messages — batched into one payload.
-  // Foundry may not have rendered messages to the DOM yet when this function is
-  // called during the ready hook, so retry once after 2 seconds if the list is empty.
-  async function collectAndSend(styleTexts, externalUrls, origin) {
+  // Collect existing messages and send the full init payload.
+  // Primary: DOM query (works on reconnect, when chat log has already rendered).
+  // Fallback: buffer captured by renderChatLog hook (handles initial connection, where
+  // the chat log renders after the ready hook fires and the DOM query returns empty).
+  function collectAndSend(styleTexts, externalUrls, origin) {
     const chatLog = document.querySelector("ol.chat-log");
     debugChatLog("ol.chat-log element", chatLog ? "found" : "NOT FOUND (null)");
 
-    // Check game.messages (Foundry's authoritative message store)
     try {
       if (typeof game !== "undefined" && game.messages) {
         debugChatLog("game.messages.size", game.messages.size);
-        debugChatLog("game.ready", game.ready);
-      } else {
-        debugChatLog("game.messages", "not available");
       }
     } catch (e) {
       debugChatLog("game.messages access error", String(e));
     }
 
-    const messages = chatLog
+    const domMessages = chatLog
       ? Array.from(chatLog.querySelectorAll("li.chat-message")).map(msg => makeAbsolute(msg.outerHTML))
       : [];
-    debugChatLog("li.chat-message from DOM", messages.length);
+    debugChatLog("li.chat-message from DOM", domMessages.length);
+    debugChatLog("_chatLogHistoryBuffer", _chatLogHistoryBuffer !== null ? _chatLogHistoryBuffer.length : "null (renderChatLog not yet fired)");
 
-    if (messages.length === 0 && chatLog) {
-      debugChatLog("0 messages in DOM, chatLog element exists — retrying in 2s");
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    const messages = domMessages.length > 0
+      ? domMessages
+      : (_chatLogHistoryBuffer !== null ? _chatLogHistoryBuffer : []);
 
-      const retryMessages = Array.from(chatLog.querySelectorAll("li.chat-message")).map(msg => makeAbsolute(msg.outerHTML));
-      debugChatLog("li.chat-message from DOM after retry", retryMessages.length);
-
-      // Check game.messages again after retry
-      try {
-        if (typeof game !== "undefined" && game.messages) {
-          debugChatLog("game.messages.size after retry", game.messages.size);
-        }
-      } catch (e) {
-        debugChatLog("game.messages access error after retry", String(e));
-      }
-
-      debugChatLog("sending chatInit (retry path)", {
-        messages: retryMessages.length,
-        styleTexts: styleTexts.length,
-        styleUrls: externalUrls.length
-      });
-      sendMessage({ type: "chatInit", foundryUrl: origin, styleUrls: externalUrls, styleTexts, messages: retryMessages });
-      return;
-    }
-
-    debugChatLog("sending chatInit (normal path)", {
-      messages: messages.length,
-      styleTexts: styleTexts.length,
-      styleUrls: externalUrls.length
-    });
+    const source = domMessages.length > 0 ? "DOM" : (_chatLogHistoryBuffer !== null ? "renderChatLog buffer" : "empty");
+    debugChatLog("sending chatInit", { source, messages: messages.length, styleTexts: styleTexts.length, styleUrls: externalUrls.length });
     sendMessage({ type: "chatInit", foundryUrl: origin, styleUrls: externalUrls, styleTexts, messages });
   }
 
-  await collectAndSend(styleTexts, externalUrls, origin);
+  collectAndSend(styleTexts, externalUrls, origin);
 }
