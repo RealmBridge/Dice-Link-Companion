@@ -70,6 +70,15 @@ export function setupChatLog() {
     }
 
     debugChatLog("MSG STRUCTURE [" + message.id + "]\n" + getStructure(li));
+
+    // DIAGNOSTIC: log the opening tag of div.collapsible-content.card-content to
+    // detect any inline style attribute (e.g. display:none) set by MIDI/Foundry JS.
+    const collapsibleContent = li.querySelector('div.collapsible-content.card-content');
+    if (collapsibleContent) {
+      const raw = collapsibleContent.outerHTML;
+      debugChatLog("COLLAPSIBLE-TAG [" + message.id + "]: " + raw.slice(0, raw.indexOf('>') + 1));
+    }
+
     sendMessage({
       type: "chatMessage",
       messageId: message.id,
