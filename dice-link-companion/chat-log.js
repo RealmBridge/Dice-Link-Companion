@@ -75,6 +75,15 @@ export function setupChatLog() {
       messageId: message.id,
       html: makeAbsolute(li.outerHTML)
     });
+
+    // DIAGNOSTIC: watch for MIDI post-render DOM mutations on player damage cards
+    if (li.querySelector('.midi-qol-player-damage-card')) {
+      const observer = new MutationObserver(() => {
+        observer.disconnect();
+        debugChatLog("MUTATION OBSERVED [" + message.id + "]\n" + getStructure(li));
+      });
+      observer.observe(li, { childList: true, subtree: true, characterData: true, attributes: true });
+    }
   });
   debug("Chat log: renderChatMessageHTML hook registered");
 }
