@@ -78,9 +78,19 @@ export function setupChatLog() {
 
     // DIAGNOSTIC: watch for MIDI post-render DOM mutations on player damage cards
     if (li.querySelector('.midi-qol-player-damage-card')) {
+      const dmgSpan = li.querySelector('.midi-qol-dmg-text');
+      debugChatLog("PLAYER-DMG INITIAL [" + message.id + "] dmg-text innerHTML: " + (dmgSpan ? dmgSpan.innerHTML : "NOT FOUND"));
+
+      let mutationCount = 0;
       const observer = new MutationObserver(() => {
-        observer.disconnect();
-        debugChatLog("MUTATION OBSERVED [" + message.id + "]\n" + getStructure(li));
+        mutationCount++;
+        const span = li.querySelector('.midi-qol-dmg-text');
+        debugChatLog("MUTATION #" + mutationCount + " [" + message.id + "] li.classes=" + li.className + " | dmg-text innerHTML: " + (span ? span.innerHTML : "NOT FOUND"));
+        debugChatLog("MUTATION #" + mutationCount + " STRUCTURE [" + message.id + "]\n" + getStructure(li));
+        if (mutationCount >= 5) {
+          observer.disconnect();
+          debugChatLog("MUTATION OBSERVER DISCONNECTED [" + message.id + "] after " + mutationCount + " batches");
+        }
       });
       observer.observe(li, { childList: true, subtree: true, characterData: true, attributes: true });
     }
