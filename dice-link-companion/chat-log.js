@@ -28,7 +28,13 @@ function getStructure(el, depth) {
   if (!el || !el.tagName) return "";
   const indent = "  ".repeat(depth);
   const classes = el.className ? "." + String(el.className).trim().replace(/\s+/g, ".") : "";
-  let result = indent + "<" + el.tagName.toLowerCase() + classes + ">";
+  const tag = el.tagName.toLowerCase();
+  let extra = "";
+  if (tag === "img") {
+    const src = el.getAttribute("src") || "";
+    extra = " src=\"" + (src.length > 60 ? src.slice(0, 60) + "..." : src) + "\"";
+  }
+  let result = indent + "<" + tag + classes + extra + ">";
   for (let i = 0; i < el.children.length; i++) {
     const child = getStructure(el.children[i], depth + 1);
     if (child) result += "\n" + child;
