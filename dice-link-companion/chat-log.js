@@ -76,6 +76,23 @@ export function setupChatLog() {
       html: makeAbsolute(li.outerHTML)
     });
 
+    // Re-send the activation card once MIDI adds the apply-damage controls.
+    // renderChatMessageHTML fires before MIDI mutates the targets tray into the
+    // apply section — the apply button never appears at initial capture time.
+    if (li.querySelector('.midi-qol-hits-display') && !li.querySelector('button.midi-qol-dmg-btn-apply')) {
+      const applyObserver = new MutationObserver(() => {
+        if (li.querySelector('button.midi-qol-dmg-btn-apply')) {
+          applyObserver.disconnect();
+          sendMessage({
+            type: "chatMessage",
+            messageId: message.id,
+            html: makeAbsolute(li.outerHTML)
+          });
+        }
+      });
+      applyObserver.observe(li, { childList: true, subtree: true });
+    }
+
     // DIAGNOSTIC: watch for MIDI post-render DOM mutations on player damage cards
     if (li.querySelector('.midi-qol-player-damage-card')) {
       const dmgSpan = li.querySelector('.midi-qol-dmg-text');
