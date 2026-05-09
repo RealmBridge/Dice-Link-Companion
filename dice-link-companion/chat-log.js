@@ -6,17 +6,6 @@
 import { sendMessage, getConnectionStatus } from "./qwebchannel-client.js";
 import { debug, debugChatLog } from "./debug.js";
 
-// Tracks message IDs already sent this session to prevent duplicates.
-// renderChatMessageHTML can fire twice for the same message when modules
-// like chatlog-prune extend ChatLog and trigger a re-render on creation.
-const _sentMessageIds = new Set();
-
-// Timestamp (ms) when the DLA connection was established.
-// Used to filter messages that were created before connection — these are
-// historical messages that some modules re-render at load time and would
-// otherwise appear as if they were new.
-let _connectionTime = 0;
-
 /**
  * Return the tag+class skeleton of an element tree as a plain string.
  * Used for CSS diagnostics — logs structure without any text content so the
@@ -65,13 +54,6 @@ export function setupChatLog() {
   Hooks.on("renderChatMessageHTML", (message, element) => {
     if (!getConnectionStatus()) return;
 
-    if (_sentMessageIds.has(message.id)) {
-      const li2 = element?.closest?.("li.chat-message") || element;
-      debugChatLog("MSG STRUCTURE (UPDATE) [" + message.id + "]\n" + (li2 ? getStructure(li2) : "(no element)"));
-      debugChatLog("renderChatMessageHTML: duplicate, skipping", message.id);
-      return;
-    }
-
     // Skip messages created before this connection was established.
     // Some modules re-render old messages at load time, which would cause
     // them to appear as new messages in DLA. Any message older than 2 minutes
@@ -87,7 +69,6 @@ export function setupChatLog() {
       return;
     }
 
-    _sentMessageIds.add(message.id);
     debugChatLog("MSG STRUCTURE [" + message.id + "]\n" + getStructure(li));
     sendMessage({
       type: "chatMessage",
@@ -105,7 +86,5 @@ export function setupChatLog() {
  */
 export function sendInitialChatHistory() {
   debugChatLog("sendInitialChatHistory: sending chatInit");
-  _connectionTime = Date.now();
-  _sentMessageIds.clear();
   sendMessage({ type: "chatInit" });
 }
