@@ -66,6 +66,8 @@ export function setupChatLog() {
     if (!getConnectionStatus()) return;
 
     if (_sentMessageIds.has(message.id)) {
+      const li2 = element?.closest?.("li.chat-message") || element;
+      debugChatLog("MSG STRUCTURE (UPDATE) [" + message.id + "]\n" + (li2 ? getStructure(li2) : "(no element)"));
       debugChatLog("renderChatMessageHTML: duplicate, skipping", message.id);
       return;
     }
