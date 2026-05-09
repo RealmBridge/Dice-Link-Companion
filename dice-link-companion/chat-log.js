@@ -79,6 +79,14 @@ export function setupChatLog() {
       debugChatLog("COLLAPSIBLE-TAG [" + message.id + "]: " + raw.slice(0, raw.indexOf('>') + 1));
     }
 
+    // DIAGNOSTIC: log the opening tag of the parent div.midi-qol-damage-card.collapsible
+    // to detect any attributes or inline styles on the wrapper element.
+    const dmgCard = li.querySelector('div.midi-qol-damage-card.collapsible');
+    if (dmgCard) {
+      const raw = dmgCard.outerHTML;
+      debugChatLog("DMG-CARD-TAG [" + message.id + "]: " + raw.slice(0, raw.indexOf('>') + 1));
+    }
+
     sendMessage({
       type: "chatMessage",
       messageId: message.id,
