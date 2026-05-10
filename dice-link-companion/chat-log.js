@@ -162,18 +162,46 @@ function handleChatInteraction({ messageId, dlaId, event, value }) {
 // ============================================================================
 
 /**
- * Collect CSS stylesheet URLs, custom property values, and body classes
+ * Rewrite relative url() and bare @import path references in CSS text to absolute URLs.
+ */
+function makeAbsoluteCss(css, origin) {
+  css = css.replace(
+    /url\((['"]?)(?!https?:\/\/|\/\/|data:|#)([^'")\s]+)\1\)/g,
+    (match, quote, path) => {
+      const absolute = path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
+      return `url(${quote}${absolute}${quote})`;
+    }
+  );
+  css = css.replace(
+    /@import\s+(['"])(?!https?:\/\/|\/\/)([^'"]+)\1/g,
+    (match, quote, path) => {
+      const absolute = path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
+      return `@import ${quote}${absolute}${quote}`;
+    }
+  );
+  return css;
+}
+
+/**
+ * Collect embedded CSS blocks, custom property values, and body classes
  * from the Foundry page, then send them to DLA so it can replicate Foundry's styling.
+ *
+ * Foundry's CSS lives in <style> elements (no href). The only <link> stylesheet
+ * is DLC's own module CSS, which is irrelevant for chat card rendering.
  */
 function sendChatSetup() {
-  const styleUrls = [];
+  const origin = window.location.origin;
+
+  const styleTexts = [];
   for (const sheet of document.styleSheets) {
+    if (sheet.href) continue;
     try {
-      if (sheet.href) {
-        styleUrls.push(sheet.href);
+      const text = sheet.ownerNode?.textContent;
+      if (text && text.trim()) {
+        styleTexts.push(makeAbsoluteCss(text.trim(), origin));
       }
     } catch (e) {
-      // Cross-origin sheets throw on .href access in strict mode — skip
+      // Skip inaccessible sheets
     }
   }
 
@@ -190,13 +218,11 @@ function sendChatSetup() {
   }
 
   const bodyClasses = Array.from(document.body.classList);
-
-  // Capture the computed root font-size so DLA can match Foundry's rem/em base exactly
   const rootFontSize = getComputedStyle(document.documentElement).fontSize;
 
-  debugChatLog(`sendChatSetup: ${styleUrls.length} sheets, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
+  debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
 
-  sendMessage({ type: "chatSetup", styleUrls, cssVars, bodyClasses, rootFontSize });
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize });
 }
 
 // ============================================================================
