@@ -189,33 +189,12 @@ function makeAbsoluteCss(css, origin) {
  * Foundry's CSS lives in <style> elements (no href). The only <link> stylesheet
  * is DLC's own module CSS, which is irrelevant for chat card rendering.
  */
-function sendChatSetup() {
+async function sendChatSetup() {
   const origin = window.location.origin;
 
-  // Diagnostic: inventory every stylesheet the browser knows about
-  const sheetDiagnostic = [];
-  for (let i = 0; i < document.styleSheets.length; i++) {
-    const sheet = document.styleSheets[i];
-    const href = sheet.href ? sheet.href.substring(0, 120) : null;
-    const tag = sheet.ownerNode?.tagName ?? 'null';
-    const textLen = sheet.ownerNode?.textContent?.length ?? -1;
-    let rulesCount = -1;
-    try { rulesCount = sheet.cssRules?.length ?? -1; } catch (e) { rulesCount = -2; }
-    sheetDiagnostic.push({ i, tag, href, textLen, rulesCount });
-  }
-  const adopted = document.adoptedStyleSheets || [];
-  const adoptedDiagnostic = [];
-  for (let i = 0; i < adopted.length; i++) {
-    const sheet = adopted[i];
-    let rulesCount = -1, totalTextLen = 0;
-    try {
-      rulesCount = sheet.cssRules?.length ?? -1;
-      totalTextLen = Array.from(sheet.cssRules).reduce((s, r) => s + (r.cssText?.length || 0), 0);
-    } catch (e) { rulesCount = -2; }
-    adoptedDiagnostic.push({ i, rulesCount, totalTextLen });
-  }
-
   const styleTexts = [];
+
+  // Collect inline <style> element text
   for (const sheet of document.styleSheets) {
     if (sheet.href) continue;
     try {
@@ -225,6 +204,22 @@ function sendChatSetup() {
       }
     } catch (e) {
       // Skip inaccessible sheets
+    }
+  }
+
+  // Fetch same-origin <link> stylesheets (foundry2.css and any others)
+  for (const sheet of document.styleSheets) {
+    if (!sheet.href) continue;
+    try {
+      if (new URL(sheet.href).origin !== origin) continue;
+      const response = await fetch(sheet.href);
+      if (!response.ok) continue;
+      const text = await response.text();
+      if (text && text.trim()) {
+        styleTexts.push(makeAbsoluteCss(text.trim(), origin));
+      }
+    } catch (e) {
+      debugChatLog('sendChatSetup: error fetching linked sheet:', sheet.href, String(e));
     }
   }
 
@@ -245,21 +240,7 @@ function sendChatSetup() {
 
   debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
 
-  // Diagnostic: inspect the individual rules inside stylesheet[0] (foundry2.css)
-  const rulesDiagnostic = [];
-  try {
-    const sheet0 = document.styleSheets[0];
-    if (sheet0) {
-      const rules = sheet0.cssRules || [];
-      for (let i = 0; i < rules.length; i++) {
-        rulesDiagnostic.push({ i, text: (rules[i].cssText || '').substring(0, 120) });
-      }
-    }
-  } catch (e) {
-    rulesDiagnostic.push({ error: String(e) });
-  }
-
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sheetDiagnostic, adoptedDiagnostic, rulesDiagnostic });
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize });
 }
 
 // ============================================================================
@@ -300,8 +281,8 @@ export function setupChatLog() {
  * Send CSS setup data then signal DLA to initialise its chat panel.
  * Called when the DLA connection is confirmed (and on reconnect).
  */
-export function sendInitialChatHistory() {
+export async function sendInitialChatHistory() {
   debugChatLog("sendInitialChatHistory: sending chatSetup then chatInit");
-  sendChatSetup();
+  await sendChatSetup();
   sendMessage({ type: "chatInit" });
 }
