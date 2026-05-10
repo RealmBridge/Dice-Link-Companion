@@ -245,7 +245,21 @@ function sendChatSetup() {
 
   debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
 
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sheetDiagnostic, adoptedDiagnostic });
+  // Diagnostic: inspect the individual rules inside stylesheet[0] (foundry2.css)
+  const rulesDiagnostic = [];
+  try {
+    const sheet0 = document.styleSheets[0];
+    if (sheet0) {
+      const rules = sheet0.cssRules || [];
+      for (let i = 0; i < rules.length; i++) {
+        rulesDiagnostic.push({ i, text: (rules[i].cssText || '').substring(0, 120) });
+      }
+    }
+  } catch (e) {
+    rulesDiagnostic.push({ error: String(e) });
+  }
+
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sheetDiagnostic, adoptedDiagnostic, rulesDiagnostic });
 }
 
 // ============================================================================
