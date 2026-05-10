@@ -23,6 +23,7 @@ let diceTrayRollCallback = null;
 let playerModeActionCallback = null;
 let cameraFrameCallback = null;
 let cameraStreamEndCallback = null;
+let chatInteractionCallback = null;
 
 // ============================================================================
 // INITIALIZATION - Check for QWebChannel / DLA Interface
@@ -241,6 +242,15 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
+    // Chat interaction forwarded from DLA user click
+    if (dlaInterface.chatInteractionReady) {
+      dlaInterface.chatInteractionReady.connect((data) => {
+        debugQWebChannel("Received chatInteraction signal", {});
+        const message = JSON.parse(data);
+        if (chatInteractionCallback) chatInteractionCallback(message);
+      });
+    }
+
     // Connection health check - ping/pong mechanism
     if (dlaInterface.connectionPingReady) {
       dlaInterface.connectionPingReady.connect(() => {
@@ -332,7 +342,7 @@ export function sendMessage(data) {
     } else if (data.type === "playerModesUpdate" && dlaInterface.receivePlayerModesUpdate) {
       debugQWebChannel("Calling receivePlayerModesUpdate...", {});
       dlaInterface.receivePlayerModesUpdate(jsonData);
-    } else if ((data.type === "chatMessage" || data.type === "chatInit") && dlaInterface.receiveChatMessage) {
+    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup") && dlaInterface.receiveChatMessage) {
       dlaInterface.receiveChatMessage(jsonData);
     } else {
       debugError("Unknown message type or handler not available", {
@@ -381,6 +391,10 @@ export function setCameraFrameCallback(callback) {
 
 export function setCameraStreamEndCallback(callback) {
   cameraStreamEndCallback = callback;
+}
+
+export function setChatInteractionCallback(callback) {
+  chatInteractionCallback = callback;
 }
 
 export function onConnectionChange(callback) {
