@@ -101,7 +101,13 @@ function attachObserver(messageId, li) {
     return;
   }
 
-  const observer = new MutationObserver(resetTimers);
+  const observer = new MutationObserver((mutations) => {
+    const realMutations = mutations.filter(m =>
+      !(m.type === 'attributes' && m.attributeName === 'data-dla-id')
+    );
+    if (realMutations.length === 0) return;
+    resetTimers();
+  });
   observer.observe(li, { childList: true, subtree: true, attributes: true, characterData: true });
 
   state = { observer, debounceTimer: null, timeoutTimer: null };
