@@ -233,6 +233,59 @@ async function sendChatSetup() {
     }
   }
 
+  // Fetch CSS files referenced by @import inside inline <style> blocks.
+  // Foundry v14 loads system and module CSS this way rather than as <link>
+  // elements. Fetching from DLC (same-origin) avoids the CORS block that
+  // DLA's browser would hit when trying to load the same URLs cross-origin.
+  {
+    const alreadyFetched = new Set(
+      Array.from(document.styleSheets)
+        .filter(s => s.href)
+        .map(s => s.href.split('?')[0])
+    );
+
+    const importRegex = /(?:^|\n)\s*@import\s+(['"])(?!https?:\/\/|\/\/|data:)([^'"]+)\1/g;
+    const importUrlsToFetch = [];
+
+    for (const sheet of document.styleSheets) {
+      if (sheet.href) continue;
+      const text = sheet.ownerNode?.textContent;
+      if (!text) continue;
+      importRegex.lastIndex = 0;
+      let match;
+      while ((match = importRegex.exec(text)) !== null) {
+        const path = match[2].split('?')[0];
+        const absolute = path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
+        if (!alreadyFetched.has(absolute)) {
+          importUrlsToFetch.push(absolute);
+          alreadyFetched.add(absolute);
+        }
+      }
+    }
+
+    for (const url of importUrlsToFetch) {
+      const urlPath = (() => { try { return new URL(url).pathname; } catch(e) { return url; } })();
+      try {
+        if (new URL(url).origin !== origin) {
+          debugChatLog(`sendChatSetup: skipping cross-origin @import: ${urlPath}`);
+          continue;
+        }
+        const response = await fetch(url);
+        if (!response.ok) {
+          debugChatLog(`sendChatSetup: fetch failed (${response.status}) for @import: ${urlPath}`);
+          continue;
+        }
+        const text = await response.text();
+        if (text && text.trim()) {
+          styleTexts.push(makeAbsoluteCss(text.trim(), origin));
+          debugChatLog(`sendChatSetup: fetched @import ${urlPath} (${text.length} bytes)`);
+        }
+      } catch (e) {
+        debugChatLog(`sendChatSetup: error fetching @import ${urlPath}: ${String(e)}`);
+      }
+    }
+  }
+
   const cssVars = {};
   try {
     const rootStyle = getComputedStyle(document.documentElement);
