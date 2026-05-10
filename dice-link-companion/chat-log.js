@@ -191,9 +191,12 @@ function sendChatSetup() {
 
   const bodyClasses = Array.from(document.body.classList);
 
-  debugChatLog(`sendChatSetup: ${styleUrls.length} sheets, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes`);
+  // Capture the computed root font-size so DLA can match Foundry's rem/em base exactly
+  const rootFontSize = getComputedStyle(document.documentElement).fontSize;
 
-  sendMessage({ type: "chatSetup", styleUrls, cssVars, bodyClasses });
+  debugChatLog(`sendChatSetup: ${styleUrls.length} sheets, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
+
+  sendMessage({ type: "chatSetup", styleUrls, cssVars, bodyClasses, rootFontSize });
 }
 
 // ============================================================================
