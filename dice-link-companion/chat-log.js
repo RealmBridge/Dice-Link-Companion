@@ -210,16 +210,26 @@ async function sendChatSetup() {
   // Fetch same-origin <link> stylesheets (foundry2.css and any others)
   for (const sheet of document.styleSheets) {
     if (!sheet.href) continue;
+    const sheetPath = (() => { try { return new URL(sheet.href).pathname; } catch(e) { return sheet.href; } })();
     try {
-      if (new URL(sheet.href).origin !== origin) continue;
+      if (new URL(sheet.href).origin !== origin) {
+        debugChatLog(`sendChatSetup: skipping cross-origin sheet: ${sheetPath}`);
+        continue;
+      }
       const response = await fetch(sheet.href);
-      if (!response.ok) continue;
+      if (!response.ok) {
+        debugChatLog(`sendChatSetup: fetch failed (${response.status}) for: ${sheetPath}`);
+        continue;
+      }
       const text = await response.text();
       if (text && text.trim()) {
         styleTexts.push(makeAbsoluteCss(text.trim(), origin));
+        debugChatLog(`sendChatSetup: fetched ${sheetPath} (${text.length} bytes)`);
+      } else {
+        debugChatLog(`sendChatSetup: empty response for: ${sheetPath}`);
       }
     } catch (e) {
-      debugChatLog('sendChatSetup: error fetching linked sheet:', sheet.href, String(e));
+      debugChatLog(`sendChatSetup: error fetching ${sheetPath}: ${String(e)}`);
     }
   }
 
