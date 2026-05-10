@@ -194,16 +194,13 @@ async function sendChatSetup() {
 
   const styleTexts = [];
 
-  // Collect inline <style> element text (including programmatically-built sheets)
+  // Collect inline <style> element text
   for (const sheet of document.styleSheets) {
     if (sheet.href) continue;
     try {
-      const text = sheet.ownerNode?.textContent?.trim();
-      if (text) {
-        styleTexts.push(makeAbsoluteCss(text, origin));
-      } else if (sheet.cssRules?.length > 0) {
-        const serialized = Array.from(sheet.cssRules).map(r => r.cssText).join('\n');
-        if (serialized.trim()) styleTexts.push(makeAbsoluteCss(serialized, origin));
+      const text = sheet.ownerNode?.textContent;
+      if (text && text.trim()) {
+        styleTexts.push(makeAbsoluteCss(text.trim(), origin));
       }
     } catch (e) {
       // Skip inaccessible sheets
