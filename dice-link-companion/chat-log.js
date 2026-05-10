@@ -240,7 +240,22 @@ async function sendChatSetup() {
 
   debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
 
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize });
+  // Diagnostic: inspect rules in programmatically-built <style> sheets (0b textContent, cssRules > 0)
+  const programmaticDiagnostic = [];
+  for (let si = 0; si < document.styleSheets.length; si++) {
+    const sheet = document.styleSheets[si];
+    if (sheet.href) continue;
+    const textLen = sheet.ownerNode?.textContent?.length ?? 0;
+    if (textLen > 0) continue;
+    let rules = [];
+    try { rules = Array.from(sheet.cssRules || []); } catch (e) { continue; }
+    if (rules.length === 0) continue;
+    for (let ri = 0; ri < rules.length; ri++) {
+      programmaticDiagnostic.push({ si, ri, text: (rules[ri].cssText || '').substring(0, 200) });
+    }
+  }
+
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, programmaticDiagnostic });
 }
 
 // ============================================================================
