@@ -192,6 +192,29 @@ function makeAbsoluteCss(css, origin) {
 function sendChatSetup() {
   const origin = window.location.origin;
 
+  // Diagnostic: inventory every stylesheet the browser knows about
+  const sheetDiagnostic = [];
+  for (let i = 0; i < document.styleSheets.length; i++) {
+    const sheet = document.styleSheets[i];
+    const href = sheet.href ? sheet.href.substring(0, 120) : null;
+    const tag = sheet.ownerNode?.tagName ?? 'null';
+    const textLen = sheet.ownerNode?.textContent?.length ?? -1;
+    let rulesCount = -1;
+    try { rulesCount = sheet.cssRules?.length ?? -1; } catch (e) { rulesCount = -2; }
+    sheetDiagnostic.push({ i, tag, href, textLen, rulesCount });
+  }
+  const adopted = document.adoptedStyleSheets || [];
+  const adoptedDiagnostic = [];
+  for (let i = 0; i < adopted.length; i++) {
+    const sheet = adopted[i];
+    let rulesCount = -1, totalTextLen = 0;
+    try {
+      rulesCount = sheet.cssRules?.length ?? -1;
+      totalTextLen = Array.from(sheet.cssRules).reduce((s, r) => s + (r.cssText?.length || 0), 0);
+    } catch (e) { rulesCount = -2; }
+    adoptedDiagnostic.push({ i, rulesCount, totalTextLen });
+  }
+
   const styleTexts = [];
   for (const sheet of document.styleSheets) {
     if (sheet.href) continue;
@@ -222,7 +245,7 @@ function sendChatSetup() {
 
   debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
 
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize });
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sheetDiagnostic, adoptedDiagnostic });
 }
 
 // ============================================================================
