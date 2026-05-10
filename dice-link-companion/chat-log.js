@@ -266,9 +266,27 @@ async function sendChatSetup() {
  * Register the renderChatMessageHTML hook to forward new messages to DLA.
  * Called once during module initialisation.
  */
+let _stylesheetSnapshotSent = false;
+
 export function setupChatLog() {
   Hooks.on("renderChatMessageHTML", (message, element) => {
     if (!getConnectionStatus()) return;
+
+    // One-shot: snapshot all stylesheets at first message render to detect late-loading CSS
+    if (!_stylesheetSnapshotSent) {
+      _stylesheetSnapshotSent = true;
+      const sheets = [];
+      for (let i = 0; i < document.styleSheets.length; i++) {
+        const s = document.styleSheets[i];
+        const href = s.href ? s.href.substring(0, 120) : null;
+        const tag = s.ownerNode?.tagName ?? 'null';
+        const textLen = s.ownerNode?.textContent?.length ?? -1;
+        let rulesCount = -1;
+        try { rulesCount = s.cssRules?.length ?? -1; } catch (e) { rulesCount = -2; }
+        sheets.push({ i, tag, href, textLen, rulesCount });
+      }
+      sendMessage({ type: 'chatDiagnostic', event: 'firstMessageSheets', sheets });
+    }
 
     // Skip messages older than 2 minutes — treat as historical re-renders, not new
     if (message.timestamp && (Date.now() - message.timestamp) > 120000) {
