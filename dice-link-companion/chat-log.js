@@ -286,16 +286,26 @@ async function sendChatSetup() {
     }
   }
 
+  // Chrome does not enumerate custom properties via getComputedStyle iteration,
+  // but getPropertyValue(name) works when the name is known. We extract every
+  // var name from the CSS text we already have, then read the computed value
+  // from three elements in order: root → body → a live chat message card.
+  // Each pass overwrites the previous, so card-level theme overrides (e.g.
+  // body.theme-dark .chat-message rules) end up as the final value.
   const cssVars = {};
-  try {
-    const rootStyle = getComputedStyle(document.documentElement);
-    for (const prop of rootStyle) {
-      if (prop.startsWith('--')) {
-        cssVars[prop] = rootStyle.getPropertyValue(prop).trim();
-      }
+  const varNamesInCss = new Set();
+  const varNameRegex = /\B(--[\w-]+)\s*:/g;
+  for (const text of styleTexts) {
+    varNameRegex.lastIndex = 0;
+    let m;
+    while ((m = varNameRegex.exec(text)) !== null) varNamesInCss.add(m[1]);
+  }
+  for (const el of [document.documentElement, document.body, document.querySelector('li.chat-message')].filter(Boolean)) {
+    const computed = getComputedStyle(el);
+    for (const name of varNamesInCss) {
+      const val = computed.getPropertyValue(name).trim();
+      if (val) cssVars[name] = val;
     }
-  } catch (e) {
-    debugChatLog('sendChatSetup: error collecting CSS vars:', e);
   }
 
   const bodyClasses = Array.from(document.body.classList);
