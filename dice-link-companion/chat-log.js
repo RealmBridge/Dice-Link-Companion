@@ -65,7 +65,67 @@ function numberAndSerialize(messageId, li) {
  */
 function sendCard(messageId, li) {
   const html = numberAndSerialize(messageId, li);
-  sendMessage({ type: "chatMessage", messageId, html });
+  const msg = { type: "chatMessage", messageId, html };
+  const refStyles = sampleRefStyles(li);
+  if (refStyles) msg.refStyles = refStyles;
+  sendMessage(msg);
+}
+
+// ============================================================================
+// STYLE REFERENCE SAMPLING — DLC-side ground truth for DLA style comparison
+// ============================================================================
+
+const _DIAG_SELECTORS = [
+  '.card-buttons header',
+  '.card-buttons header span',
+  '.pill',
+  '.pill.transparent',
+  '[class*="pip"]',
+  'label[class*="pip"]',
+  '[class*="damage"]',
+  '[class*="targeted"]',
+  '[class*="selected"]',
+  'button',
+  '[data-action]',
+  'i[class]',
+];
+const _DIAG_MAX_PER_SEL = 5;
+
+/**
+ * For rich cards (those with card-buttons, pill, or pip elements), read the
+ * computed styles of key elements directly from the live Foundry DOM.
+ * These values are sent to DLA so it can diff what it renders against the
+ * correct Foundry values and log only the mismatches.
+ * Returns null for simple cards that lack those elements.
+ */
+function sampleRefStyles(li) {
+  if (!li.querySelector('.card-buttons, .pill, [class*="pip"]')) return null;
+  const result = {};
+  for (const sel of _DIAG_SELECTORS) {
+    const els = li.querySelectorAll(sel);
+    if (!els.length) continue;
+    const entries = [];
+    els.forEach((el, i) => {
+      if (i >= _DIAG_MAX_PER_SEL) return;
+      const cs = getComputedStyle(el);
+      const entry = {
+        color:       cs.color,
+        bg:          cs.backgroundColor,
+        borderStyle: cs.borderStyle,
+        borderColor: cs.borderColor,
+        position:    cs.position,
+      };
+      const bp = getComputedStyle(el, '::before');
+      if (bp.content && !['none', '""', 'normal'].includes(bp.content))
+        entry.before = { content: bp.content, fontFamily: bp.fontFamily };
+      const ap = getComputedStyle(el, '::after');
+      if (ap.content && !['none', '""', 'normal'].includes(ap.content))
+        entry.after = { content: ap.content, fontFamily: ap.fontFamily };
+      entries.push(entry);
+    });
+    if (entries.length) result[sel] = entries;
+  }
+  return Object.keys(result).length ? result : null;
 }
 
 // ============================================================================
