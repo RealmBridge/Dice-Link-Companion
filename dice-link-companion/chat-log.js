@@ -407,7 +407,8 @@ async function sendChatSetup() {
     }
   }
 
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic, dnd5eDiagVars });
+  const chatContainerClasses = Array.from(document.getElementById('chat')?.classList || []);
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic, dnd5eDiagVars, chatContainerClasses });
 }
 
 // ============================================================================
