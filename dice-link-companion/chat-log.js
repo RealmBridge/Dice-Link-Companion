@@ -311,7 +311,11 @@ async function sendChatSetup() {
   const bodyClasses = Array.from(document.body.classList);
   const rootFontSize = getComputedStyle(document.documentElement).fontSize;
 
-  debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}`);
+  // Read Foundry's sidebar width from its CSS variable — available regardless of collapse state
+  // because Foundry collapses via margin change, not width change.
+  const sidebarWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 300;
+
+  debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}, sidebarWidth=${sidebarWidth}`);
 
   // Diagnostic: inspect rules in programmatically-built <style> sheets (0b textContent, cssRules > 0)
   const programmaticDiagnostic = [];
@@ -328,7 +332,7 @@ async function sendChatSetup() {
     }
   }
 
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, programmaticDiagnostic });
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic });
 }
 
 // ============================================================================
