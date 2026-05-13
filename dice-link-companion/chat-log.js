@@ -308,6 +308,21 @@ async function sendChatSetup() {
     }
   }
 
+  // Diagnostic: dnd5e may define theme colour vars on .dnd5e2/.application rather than :root/body.
+  // Collect vars from those elements so DLA can compare what it received vs what's actually set.
+  const dnd5eDiagVars = {};
+  for (const sel of ['.dnd5e2', '.application', '.dnd5e2.themed', '.themed']) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    const computed = getComputedStyle(el);
+    const found = {};
+    for (const name of varNamesInCss) {
+      const val = computed.getPropertyValue(name).trim();
+      if (val) found[name] = val;
+    }
+    if (Object.keys(found).length > 0) dnd5eDiagVars[sel] = found;
+  }
+
   const bodyClasses = Array.from(document.body.classList);
   const rootFontSize = getComputedStyle(document.documentElement).fontSize;
 
@@ -332,7 +347,7 @@ async function sendChatSetup() {
     }
   }
 
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic });
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic, dnd5eDiagVars });
 }
 
 // ============================================================================
