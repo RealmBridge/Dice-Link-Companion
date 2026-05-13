@@ -411,8 +411,15 @@ async function sendChatSetup() {
     }
   }
 
-  const chatContainerClasses = Array.from(document.getElementById('chat')?.classList || []);
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic, dnd5eDiagVars, chatContainerClasses });
+  let interfaceTheme = '';
+  try {
+    const uiConfig = game.settings.get('core', 'uiConfig');
+    interfaceTheme = uiConfig?.colorScheme?.interface || '';
+  } catch (e) {}
+  if (!interfaceTheme) {
+    interfaceTheme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic, dnd5eDiagVars, interfaceTheme });
 }
 
 // ============================================================================
