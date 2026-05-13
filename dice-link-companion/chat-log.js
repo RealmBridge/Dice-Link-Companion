@@ -286,12 +286,9 @@ async function sendChatSetup() {
     }
   }
 
-  // Chrome does not enumerate custom properties via getComputedStyle iteration,
-  // but getPropertyValue(name) works when the name is known. We extract every
-  // var name from the CSS text we already have, then read the computed value
-  // from three elements in order: root → body → a live chat message card.
-  // Each pass overwrites the previous, so card-level theme overrides (e.g.
-  // body.theme-dark .chat-message rules) end up as the final value.
+  // Read all CSS variable values from the active theme element.
+  // A .themed element inherits root defaults AND has any theme overrides applied,
+  // so one read gives us the complete correct set. Fall back to body if not found.
   const cssVars = {};
   const varNamesInCss = new Set();
   const varNameRegex = /\B(--[\w-]+)\s*:/g;
@@ -300,12 +297,11 @@ async function sendChatSetup() {
     let m;
     while ((m = varNameRegex.exec(text)) !== null) varNamesInCss.add(m[1]);
   }
-  for (const el of [document.documentElement, document.body, document.querySelector('li.chat-message')].filter(Boolean)) {
-    const computed = getComputedStyle(el);
-    for (const name of varNamesInCss) {
-      const val = computed.getPropertyValue(name).trim();
-      if (val) cssVars[name] = val;
-    }
+  const themeEl = document.querySelector('.themed') || document.body;
+  const computed = getComputedStyle(themeEl);
+  for (const name of varNamesInCss) {
+    const val = computed.getPropertyValue(name).trim();
+    if (val) cssVars[name] = val;
   }
 
   // Diagnostic: dnd5e may define theme colour vars on .dnd5e2/.application rather than :root/body.
