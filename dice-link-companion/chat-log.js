@@ -65,10 +65,14 @@ function numberAndSerialize(messageId, li) {
  */
 function sendCard(messageId, li) {
   const html = numberAndSerialize(messageId, li);
-  const msg = { type: "chatMessage", messageId, html };
-  const refStyles = sampleRefStyles(li);
-  if (refStyles) msg.refStyles = refStyles;
-  sendMessage(msg);
+  sendMessage({ type: "chatMessage", messageId, html });
+
+  // Sample ref styles after a delay so the li is in the DOM and all system
+  // hooks have run — getComputedStyle returns empty strings on disconnected elements.
+  setTimeout(() => {
+    const refStyles = sampleRefStyles(li);
+    if (refStyles) sendMessage({ type: "chatRefStyles", messageId, refStyles });
+  }, 300);
 }
 
 // ============================================================================
