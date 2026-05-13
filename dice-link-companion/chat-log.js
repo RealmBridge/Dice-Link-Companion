@@ -334,6 +334,10 @@ async function sendChatSetup() {
           debugChatLog(`sendChatSetup: skipping cross-origin @import: ${urlPath}`);
           continue;
         }
+        if (urlPath.includes('/fontawesome/')) {
+          debugChatLog(`sendChatSetup: skipping fontawesome @import (FA version conflict): ${urlPath}`);
+          continue;
+        }
         const response = await fetch(url);
         if (!response.ok) {
           debugChatLog(`sendChatSetup: fetch failed (${response.status}) for @import: ${urlPath}`);
