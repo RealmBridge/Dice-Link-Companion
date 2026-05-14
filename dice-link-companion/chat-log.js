@@ -354,6 +354,30 @@ async function sendChatSetup() {
     }
   }
 
+  // Collect @font-face rules from constructable stylesheets.
+  // Foundry systems (e.g. dnd5e) register custom icon fonts via JavaScript-built
+  // stylesheets that have no ownerNode textContent and no href — the blocks above skip them.
+  // The browser resolves @font-face src URLs to absolute form, so rule.cssText is safe to use directly.
+  {
+    const fontFaceBlocks = [];
+    for (const sheet of document.styleSheets) {
+      if (sheet.href) continue;
+      const textLen = sheet.ownerNode?.textContent?.length ?? 0;
+      if (textLen > 0) continue;
+      let rules;
+      try { rules = Array.from(sheet.cssRules || []); } catch (e) { continue; }
+      for (const rule of rules) {
+        if (rule.type === CSSRule.FONT_FACE_RULE) {
+          fontFaceBlocks.push(rule.cssText);
+        }
+      }
+    }
+    if (fontFaceBlocks.length > 0) {
+      styleTexts.push(fontFaceBlocks.join('\n'));
+      debugChatLog(`sendChatSetup: collected ${fontFaceBlocks.length} @font-face rules from constructable stylesheets`);
+    }
+  }
+
   // Read all CSS variable values from the active theme element.
   // A .themed element inherits root defaults AND has any theme overrides applied,
   // so one read gives us the complete correct set. Fall back to body if not found.
