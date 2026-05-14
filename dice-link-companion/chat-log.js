@@ -30,7 +30,7 @@ const OBSERVER_TIMEOUT_MS = 15000;
 function makeAbsolute(html) {
   const origin = window.location.origin;
   return html.replace(
-    /\b(src|href)="(?!https?:\/\/|\/\/|data:|#|javascript:)([^"]*)"/g,
+    /\b(src|href|data-src)="(?!https?:\/\/|\/\/|data:|#|javascript:)([^"]*)"/g,
     (match, attr, path) => {
       const absolute = path.startsWith("/") ? `${origin}${path}` : `${origin}/${path}`;
       return `${attr}="${absolute}"`;
@@ -399,26 +399,19 @@ async function sendChatSetup() {
     if (val) cssVars[name] = val;
   }
 
-  // Collect dnd5e chat-card CSS vars.
-  // Character sheet .dnd5e2 elements use the dark UI theme; chat cards use a distinct
-  // light-parchment scheme. Reading from an actual chat message gives the correct values.
+  // Diagnostic: collect computed vars from dnd5e-specific elements so DLA can
+  // compare what it received vs what Foundry actually renders.
   const dnd5eDiagVars = {};
-  const chatCardEl =
-    document.querySelector('#chat-log .chat-message.dnd5e2') ||
-    document.querySelector('#chat-log .chat-message .dnd5e2');
-  if (chatCardEl) {
-    const ccComputed = getComputedStyle(chatCardEl);
+  for (const sel of ['.dnd5e2', '.application', '.dnd5e2.themed', '.themed']) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    const elComputed = getComputedStyle(el);
     const found = {};
     for (const name of varNamesInCss) {
-      const val = ccComputed.getPropertyValue(name).trim();
+      const val = elComputed.getPropertyValue(name).trim();
       if (val) found[name] = val;
     }
-    if (Object.keys(found).length > 0) {
-      dnd5eDiagVars['.dnd5e2'] = found;
-      debugChatLog(`sendChatSetup: dnd5e chat-card vars sampled from ${chatCardEl.tagName}.${[...chatCardEl.classList].join('.')}`);
-    }
-  } else {
-    debugChatLog('sendChatSetup: no dnd5e chat card in #chat-log — dnd5e vars not collected');
+    if (Object.keys(found).length > 0) dnd5eDiagVars[sel] = found;
   }
 
   const bodyClasses = Array.from(document.body.classList);
