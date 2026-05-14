@@ -227,21 +227,24 @@ function handleChatInteraction({ messageId, dlaId, event, value }) {
 
 /**
  * Rewrite relative url() and bare @import path references in CSS text to absolute URLs.
+ * baseUrl should be the URL of the CSS file being processed so that relative paths
+ * (e.g. "fonts/foo.woff2" inside "/systems/dnd5e/dnd5e.css") resolve correctly.
+ * Falls back to origin-root resolution when baseUrl is not provided (inline <style> blocks).
  */
-function makeAbsoluteCss(css, origin) {
+function makeAbsoluteCss(css, origin, baseUrl) {
+  const resolveRelative = (path) => {
+    if (baseUrl) {
+      try { return new URL(path, baseUrl).href; } catch(e) {}
+    }
+    return path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
+  };
   css = css.replace(
     /url\((['"]?)(?!https?:\/\/|\/\/|data:|#)([^'")\s]+)\1\)/g,
-    (match, quote, path) => {
-      const absolute = path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
-      return `url(${quote}${absolute}${quote})`;
-    }
+    (match, quote, path) => `url(${quote}${resolveRelative(path)}${quote})`
   );
   css = css.replace(
     /@import\s+(['"])(?!https?:\/\/|\/\/)([^'"]+)\1/g,
-    (match, quote, path) => {
-      const absolute = path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
-      return `@import ${quote}${absolute}${quote}`;
-    }
+    (match, quote, path) => `@import ${quote}${resolveRelative(path)}${quote}`
   );
   return css;
 }
@@ -287,7 +290,7 @@ async function sendChatSetup() {
       }
       const text = await response.text();
       if (text && text.trim()) {
-        styleTexts.push(makeAbsoluteCss(text.trim(), origin));
+        styleTexts.push(makeAbsoluteCss(text.trim(), origin, sheet.href));
         debugChatLog(`sendChatSetup: fetched ${sheetPath} (${text.length} bytes)`);
       } else {
         debugChatLog(`sendChatSetup: empty response for: ${sheetPath}`);
@@ -345,7 +348,7 @@ async function sendChatSetup() {
         }
         const text = await response.text();
         if (text && text.trim()) {
-          styleTexts.push(makeAbsoluteCss(text.trim(), origin));
+          styleTexts.push(makeAbsoluteCss(text.trim(), origin, url));
           debugChatLog(`sendChatSetup: fetched @import ${urlPath} (${text.length} bytes)`);
         }
       } catch (e) {
@@ -396,19 +399,26 @@ async function sendChatSetup() {
     if (val) cssVars[name] = val;
   }
 
-  // Diagnostic: dnd5e may define theme colour vars on .dnd5e2/.application rather than :root/body.
-  // Collect vars from those elements so DLA can compare what it received vs what's actually set.
+  // Collect dnd5e chat-card CSS vars.
+  // Character sheet .dnd5e2 elements use the dark UI theme; chat cards use a distinct
+  // light-parchment scheme. Reading from an actual chat message gives the correct values.
   const dnd5eDiagVars = {};
-  for (const sel of ['.dnd5e2', '.application', '.dnd5e2.themed', '.themed']) {
-    const el = document.querySelector(sel);
-    if (!el) continue;
-    const computed = getComputedStyle(el);
+  const chatCardEl =
+    document.querySelector('#chat-log .chat-message.dnd5e2') ||
+    document.querySelector('#chat-log .chat-message .dnd5e2');
+  if (chatCardEl) {
+    const ccComputed = getComputedStyle(chatCardEl);
     const found = {};
     for (const name of varNamesInCss) {
-      const val = computed.getPropertyValue(name).trim();
+      const val = ccComputed.getPropertyValue(name).trim();
       if (val) found[name] = val;
     }
-    if (Object.keys(found).length > 0) dnd5eDiagVars[sel] = found;
+    if (Object.keys(found).length > 0) {
+      dnd5eDiagVars['.dnd5e2'] = found;
+      debugChatLog(`sendChatSetup: dnd5e chat-card vars sampled from ${chatCardEl.tagName}.${[...chatCardEl.classList].join('.')}`);
+    }
+  } else {
+    debugChatLog('sendChatSetup: no dnd5e chat card in #chat-log — dnd5e vars not collected');
   }
 
   const bodyClasses = Array.from(document.body.classList);
