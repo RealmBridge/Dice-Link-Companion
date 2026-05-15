@@ -49,7 +49,7 @@ function numberAndSerialize(messageId, li) {
   const elementMap = new Map();
   let counter = 1;
 
-  li.querySelectorAll('button, select, input, details > summary, [data-action], .collapsible > label')
+  li.querySelectorAll('button, select, input, details > summary, [data-action], .collapsible > label, .dice-result')
     .forEach(el => {
       const id = counter++;
       el.setAttribute('data-dla-id', String(id));
@@ -207,6 +207,19 @@ function handleChatInteraction({ messageId, dlaId, event, value }) {
   const li = el.closest('li.chat-message');
   if (li) attachObserver(messageId, li);
 
+  if (el.classList.contains('dice-result')) {
+    const diceRoll = el.closest('.dice-roll');
+    if (diceRoll) {
+      if (diceRoll.dataset.action === 'expandRoll') {
+        diceRoll.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      } else {
+        diceRoll.classList.toggle('expanded');
+      }
+    }
+    debugChatLog(`chatInteraction: fired dice expand on dlaId=${dlaId} in message ${messageId}`);
+    return;
+  }
+
   if (event === 'change') {
     if (el.tagName === 'SELECT') {
       el.value = value;
@@ -250,6 +263,55 @@ function makeAbsoluteCss(css, origin, baseUrl) {
 }
 
 /**
+ * Scan CSS text for woff2 font URLs, fetch them same-origin (DLC runs on Foundry's
+ * origin so CORS never blocks this), and replace each URL with a base64 data URI.
+ * This makes @font-face rules self-contained so DLA doesn't need to download
+ * fonts cross-origin (where CORS blocks it even with --disable-web-security).
+ */
+async function embedFontDataUris(css) {
+  const fontFaceRegex = /@font-face\s*\{[^}]+\}/gi;
+  const woff2UrlRegex = /url\((['"]?)(https?:\/\/[^'")\s]+\.woff2)\1\)/i;
+  const uniqueUrls = new Set();
+  let m;
+  while ((m = fontFaceRegex.exec(css)) !== null) {
+    const urlMatch = woff2UrlRegex.exec(m[0]);
+    if (urlMatch) uniqueUrls.add(urlMatch[2]);
+  }
+  if (uniqueUrls.size === 0) return css;
+
+  const urlToDataUri = new Map();
+  for (const url of uniqueUrls) {
+    const shortName = url.split('/').pop();
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        debugChatLog(`embedFontDataUris: fetch failed ${resp.status} for ${shortName}`);
+        continue;
+      }
+      const buf = await resp.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
+      }
+      urlToDataUri.set(url, `data:font/woff2;base64,${btoa(binary)}`);
+      debugChatLog(`embedFontDataUris: embedded ${shortName} (${bytes.length} bytes)`);
+    } catch (e) {
+      debugChatLog(`embedFontDataUris: error for ${shortName}: ${String(e)}`);
+    }
+  }
+  if (urlToDataUri.size === 0) return css;
+
+  return css.replace(
+    /url\((['"]?)(https?:\/\/[^'")\s]+\.woff2)\1\)/g,
+    (match, quote, url) => {
+      const dataUri = urlToDataUri.get(url);
+      return dataUri ? `url(${dataUri})` : match;
+    }
+  );
+}
+
+/**
  * Collect embedded CSS blocks, custom property values, and body classes
  * from the Foundry page, then send them to DLA so it can replicate Foundry's styling.
  *
@@ -267,7 +329,7 @@ async function sendChatSetup() {
     try {
       const text = sheet.ownerNode?.textContent;
       if (text && text.trim()) {
-        styleTexts.push(makeAbsoluteCss(text.trim(), origin));
+        styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin)));
       }
     } catch (e) {
       // Skip inaccessible sheets
@@ -290,7 +352,7 @@ async function sendChatSetup() {
       }
       const text = await response.text();
       if (text && text.trim()) {
-        styleTexts.push(makeAbsoluteCss(text.trim(), origin, sheet.href));
+        styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin, sheet.href)));
         debugChatLog(`sendChatSetup: fetched ${sheetPath} (${text.length} bytes)`);
       } else {
         debugChatLog(`sendChatSetup: empty response for: ${sheetPath}`);
@@ -344,7 +406,7 @@ async function sendChatSetup() {
         }
         const text = await response.text();
         if (text && text.trim()) {
-          styleTexts.push(makeAbsoluteCss(text.trim(), origin, url));
+          styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin, url)));
           debugChatLog(`sendChatSetup: fetched @import ${urlPath} (${text.length} bytes)`);
         }
       } catch (e) {
@@ -372,7 +434,7 @@ async function sendChatSetup() {
       }
     }
     if (fontFaceBlocks.length > 0) {
-      styleTexts.push(fontFaceBlocks.join('\n'));
+      styleTexts.push(await embedFontDataUris(fontFaceBlocks.join('\n')));
       debugChatLog(`sendChatSetup: collected ${fontFaceBlocks.length} @font-face rules from constructable stylesheets`);
     }
   }
