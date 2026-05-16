@@ -508,6 +508,53 @@ async function sendChatSetup() {
 }
 
 // ============================================================================
+// CHAT VISIBILITY STATE — read Foundry's active chat type and report to DLA
+// ============================================================================
+
+const _MODE_TO_FA = {
+  public:  'fa-comments',
+  whisper: 'fa-user-secret',
+  self:    'fa-user',
+  gm:      'fa-eye-slash',
+};
+
+let _lastReportedChatMode = null;
+
+/** Read whichever chat type button currently has the active class in Foundry's sidebar. */
+function _readFoundryChatMode() {
+  if (!ui.chat?.element) return null;
+  const chatEl = ui.chat.element[0];
+  for (const [mode, faClass] of Object.entries(_MODE_TO_FA)) {
+    const icon = chatEl.querySelector(`i.${faClass}`);
+    if (!icon) continue;
+    const btn = icon.closest('button, a, [role="button"]');
+    if (btn?.classList.contains('active')) return mode;
+  }
+  return null;
+}
+
+/** Send the active mode to DLA, suppressing duplicate reports. */
+function _reportChatModeToUI(mode) {
+  if (!mode || mode === _lastReportedChatMode) return;
+  _lastReportedChatMode = mode;
+  sendMessage({ type: 'chatVisibilityState', mode });
+}
+
+/** Watch for Foundry changing the active chat type independently of DLA. */
+function _watchFoundryChatMode() {
+  if (!ui.chat?.element) return;
+  const observer = new MutationObserver(() => {
+    const mode = _readFoundryChatMode();
+    if (mode) _reportChatModeToUI(mode);
+  });
+  observer.observe(ui.chat.element[0], {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
@@ -564,21 +611,22 @@ export function setupChatLog() {
   });
 
   // Register handler for visibility mode changes from DLA's tray
-  // Finds Foundry's matching chat type button by its FontAwesome icon class and clicks it
+  // Finds Foundry's matching chat type button by its FontAwesome icon class and clicks it,
+  // then immediately reports back so DLA knows the confirmed mode.
   setChatVisibilityCallback(({ mode }) => {
     if (!ui.chat?.element) return;
-    const iconMap = {
-      public:  'fa-comments',
-      whisper: 'fa-user-secret',
-      self:    'fa-user',
-      gm:      'fa-eye-slash',
-    };
-    const iconClass = iconMap[mode];
-    if (!iconClass) return;
-    const icon = ui.chat.element[0].querySelector(`i.${iconClass}`);
+    const icon = ui.chat.element[0].querySelector(`i.${_MODE_TO_FA[mode]}`);
     const btn = icon?.closest('button, a, [role="button"]');
     if (btn) btn.click();
+    _reportChatModeToUI(mode);
   });
+
+  // Read Foundry's current active chat type and start watching for changes.
+  // Delay slightly so Foundry's sidebar has fully rendered.
+  setTimeout(() => {
+    _reportChatModeToUI(_readFoundryChatMode() || 'public');
+    _watchFoundryChatMode();
+  }, 1000);
 
   debug("Chat log: renderChatMessageHTML hook registered");
 }
