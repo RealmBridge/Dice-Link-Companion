@@ -24,6 +24,7 @@ let playerModeActionCallback = null;
 let cameraFrameCallback = null;
 let cameraStreamEndCallback = null;
 let chatInteractionCallback = null;
+let chatCommandCallback = null;
 
 // ============================================================================
 // INITIALIZATION - Check for QWebChannel / DLA Interface
@@ -251,6 +252,15 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
+    // Chat command typed in DLA tray — forward to Foundry chat
+    if (dlaInterface.chatCommandReady) {
+      dlaInterface.chatCommandReady.connect((data) => {
+        debugQWebChannel("Received chatCommand signal", {});
+        const message = JSON.parse(data);
+        if (chatCommandCallback) chatCommandCallback(message);
+      });
+    }
+
     // Connection health check - ping/pong mechanism
     if (dlaInterface.connectionPingReady) {
       dlaInterface.connectionPingReady.connect(() => {
@@ -395,6 +405,10 @@ export function setCameraStreamEndCallback(callback) {
 
 export function setChatInteractionCallback(callback) {
   chatInteractionCallback = callback;
+}
+
+export function setChatCommandCallback(callback) {
+  chatCommandCallback = callback;
 }
 
 export function onConnectionChange(callback) {

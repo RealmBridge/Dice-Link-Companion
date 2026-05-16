@@ -4,7 +4,7 @@
  * Uses Foundry's own CSS — system-agnostic.
  */
 
-import { sendMessage, getConnectionStatus, setChatInteractionCallback } from "./qwebchannel-client.js";
+import { sendMessage, getConnectionStatus, setChatInteractionCallback, setChatCommandCallback } from "./qwebchannel-client.js";
 import { debug, debugChatLog } from "./debug.js";
 
 // ============================================================================
@@ -555,6 +555,13 @@ export function setupChatLog() {
 
   // Register handler so qwebchannel-client can route chatInteraction signals here
   setChatInteractionCallback(handleChatInteraction);
+
+  // Register handler for chat commands typed in DLA's tray
+  setChatCommandCallback(async (message) => {
+    if (message.content && ui.chat) {
+      await ui.chat.processMessage(message.content);
+    }
+  });
 
   debug("Chat log: renderChatMessageHTML hook registered");
 }
