@@ -523,7 +523,7 @@ let _lastReportedChatMode = null;
 /** Read whichever chat type button currently has the active class in Foundry's sidebar. */
 function _readFoundryChatMode() {
   if (!ui.chat?.element) return null;
-  const chatEl = ui.chat.element[0];
+  const chatEl = ui.chat.element[0] ?? ui.chat.element;
   for (const [mode, faClass] of Object.entries(_MODE_TO_FA)) {
     const icon = chatEl.querySelector(`i.${faClass}`);
     if (!icon) continue;
@@ -547,7 +547,7 @@ function _watchFoundryChatMode() {
     const mode = _readFoundryChatMode();
     if (mode) _reportChatModeToUI(mode);
   });
-  observer.observe(ui.chat.element[0], {
+  observer.observe(ui.chat.element[0] ?? ui.chat.element, {
     subtree: true,
     attributes: true,
     attributeFilter: ['class'],
@@ -615,7 +615,8 @@ export function setupChatLog() {
   // then immediately reports back so DLA knows the confirmed mode.
   setChatVisibilityCallback(({ mode }) => {
     if (!ui.chat?.element) return;
-    const icon = ui.chat.element[0].querySelector(`i.${_MODE_TO_FA[mode]}`);
+    const chatEl = ui.chat.element[0] ?? ui.chat.element;
+    const icon = chatEl.querySelector(`i.${_MODE_TO_FA[mode]}`);
     const btn = icon?.closest('button, a, [role="button"]');
     if (btn) btn.click();
     _reportChatModeToUI(mode);
