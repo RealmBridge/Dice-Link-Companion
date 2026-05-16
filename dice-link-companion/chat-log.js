@@ -4,7 +4,7 @@
  * Uses Foundry's own CSS — system-agnostic.
  */
 
-import { sendMessage, getConnectionStatus, setChatInteractionCallback, setChatCommandCallback } from "./qwebchannel-client.js";
+import { sendMessage, getConnectionStatus, setChatInteractionCallback, setChatCommandCallback, setChatVisibilityCallback } from "./qwebchannel-client.js";
 import { debug, debugChatLog } from "./debug.js";
 
 // ============================================================================
@@ -561,6 +561,23 @@ export function setupChatLog() {
     if (message.content && ui.chat) {
       await ui.chat.processMessage(message.content);
     }
+  });
+
+  // Register handler for visibility mode changes from DLA's tray
+  // Finds Foundry's matching chat type button by its FontAwesome icon class and clicks it
+  setChatVisibilityCallback(({ mode }) => {
+    if (!ui.chat?.element) return;
+    const iconMap = {
+      public:  'fa-comments',
+      whisper: 'fa-user-secret',
+      self:    'fa-user',
+      gm:      'fa-eye-slash',
+    };
+    const iconClass = iconMap[mode];
+    if (!iconClass) return;
+    const icon = ui.chat.element[0].querySelector(`i.${iconClass}`);
+    const btn = icon?.closest('button, a, [role="button"]');
+    if (btn) btn.click();
   });
 
   debug("Chat log: renderChatMessageHTML hook registered");

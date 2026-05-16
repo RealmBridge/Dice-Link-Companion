@@ -25,6 +25,7 @@ let cameraFrameCallback = null;
 let cameraStreamEndCallback = null;
 let chatInteractionCallback = null;
 let chatCommandCallback = null;
+let chatVisibilityCallback = null;
 
 // ============================================================================
 // INITIALIZATION - Check for QWebChannel / DLA Interface
@@ -261,6 +262,15 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
+    // Chat visibility mode change from DLA tray — tell DLC to click Foundry's button
+    if (dlaInterface.chatVisibilityReady) {
+      dlaInterface.chatVisibilityReady.connect((data) => {
+        debugQWebChannel("Received chatVisibility signal", {});
+        const message = JSON.parse(data);
+        if (chatVisibilityCallback) chatVisibilityCallback(message);
+      });
+    }
+
     // Connection health check - ping/pong mechanism
     if (dlaInterface.connectionPingReady) {
       dlaInterface.connectionPingReady.connect(() => {
@@ -409,6 +419,10 @@ export function setChatInteractionCallback(callback) {
 
 export function setChatCommandCallback(callback) {
   chatCommandCallback = callback;
+}
+
+export function setChatVisibilityCallback(callback) {
+  chatVisibilityCallback = callback;
 }
 
 export function onConnectionChange(callback) {
