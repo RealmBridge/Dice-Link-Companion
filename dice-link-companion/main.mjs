@@ -149,7 +149,9 @@ function sendPlayerModesUpdate(players, globalOverride, pendingRequests) {
     type: "playerModesUpdate",
     players: players || [],
     globalOverride: globalOverride || null,
-    pendingRequests: pendingRequests || []
+    pendingRequests: pendingRequests || [],
+    worldId: game.world.id,
+    worldTitle: game.world.title
   });
 }
 
