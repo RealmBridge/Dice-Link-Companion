@@ -616,6 +616,10 @@ export function setupChatLog() {
   setChatVisibilityCallback(({ mode }) => {
     if (!ui.chat?.element) return;
     const chatEl = ui.chat.element[0] ?? ui.chat.element;
+    // Temporary diagnostic — remove after
+    console.log('[DLC-VIS-DIAG] chatEl tag:', chatEl?.tagName);
+    console.log('[DLC-VIS-DIAG] all i elements:', [...chatEl.querySelectorAll('i')].map(i => i.className).join(' | '));
+    console.log('[DLC-VIS-DIAG] all buttons:', [...chatEl.querySelectorAll('button, a, [role=button]')].map(b => b.className + ' > ' + b.innerHTML.substring(0, 80)).join('\n'));
     const icon = chatEl.querySelector(`i.${_MODE_TO_FA[mode]}`);
     const btn = icon?.closest('button, a, [role="button"]');
     if (btn) btn.click();
