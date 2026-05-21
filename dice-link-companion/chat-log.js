@@ -511,26 +511,32 @@ async function sendChatSetup() {
 // CHAT VISIBILITY STATE — read Foundry's active chat type and report to DLA
 // ============================================================================
 
-const _MODE_TO_FA = {
-  public:  'fa-comments',
-  whisper: 'fa-user-secret',
-  self:    'fa-user',
-  gm:      'fa-eye-slash',
+// DLA mode key → Foundry v14 messageMode key.
+// In v14 the icon/key assignments shifted: "gm" means GM+sender both see (old "whisper"),
+// "blind" means GM-only/sender cannot see (old "GM only").
+const _DLA_TO_FOUNDRY = {
+  public:  'public',
+  whisper: 'gm',
+  self:    'self',
+  gm:      'blind',
+};
+
+const _FOUNDRY_TO_DLA = {
+  public: 'public',
+  gm:     'whisper',
+  blind:  'gm',
+  self:   'self',
+  ic:     'public',
 };
 
 let _lastReportedChatMode = null;
 
-/** Read whichever chat type button currently has the active class in Foundry's sidebar. */
+/** Read the current Foundry messageMode and return the DLA equivalent. */
 function _readFoundryChatMode() {
-  if (!ui.chat?.element) return null;
-  const chatEl = ui.chat.element[0] ?? ui.chat.element;
-  for (const [mode, faClass] of Object.entries(_MODE_TO_FA)) {
-    const icon = chatEl.querySelector(`i.${faClass}`);
-    if (!icon) continue;
-    const btn = icon.closest('button, a, [role="button"]');
-    if (btn?.classList.contains('active')) return mode;
-  }
-  return null;
+  try {
+    const foundryMode = game.settings.get("core", "messageMode");
+    return _FOUNDRY_TO_DLA[foundryMode] || null;
+  } catch(e) { return null; }
 }
 
 /** Send the active mode to DLA, suppressing duplicate reports. */
@@ -540,18 +546,15 @@ function _reportChatModeToUI(mode) {
   sendMessage({ type: 'chatVisibilityState', mode });
 }
 
-/** Watch for Foundry changing the active chat type independently of DLA. */
+/** Watch for Foundry changing the message mode independently of DLA. */
 function _watchFoundryChatMode() {
-  if (!ui.chat?.element) return;
+  const modesEl = document.getElementById("message-modes");
+  if (!modesEl) return;
   const observer = new MutationObserver(() => {
     const mode = _readFoundryChatMode();
     if (mode) _reportChatModeToUI(mode);
   });
-  observer.observe(ui.chat.element[0] ?? ui.chat.element, {
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class'],
-  });
+  observer.observe(modesEl, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
 }
 
 // ============================================================================
@@ -614,15 +617,8 @@ export function setupChatLog() {
   // Finds Foundry's matching chat type button by its FontAwesome icon class and clicks it,
   // then immediately reports back so DLA knows the confirmed mode.
   setChatVisibilityCallback(({ mode }) => {
-    if (!ui.chat?.element) return;
-    const chatEl = ui.chat.element[0] ?? ui.chat.element;
-    // Temporary diagnostic — remove after
-    console.log('[DLC-VIS-DIAG] chatEl tag:', chatEl?.tagName);
-    console.log('[DLC-VIS-DIAG] all i elements:', [...chatEl.querySelectorAll('i')].map(i => i.className).join(' | '));
-    console.log('[DLC-VIS-DIAG] all buttons:', [...chatEl.querySelectorAll('button, a, [role=button]')].map(b => b.className + ' > ' + b.innerHTML.substring(0, 80)).join('\n'));
-    const icon = chatEl.querySelector(`i.${_MODE_TO_FA[mode]}`);
-    const btn = icon?.closest('button, a, [role="button"]');
-    if (btn) btn.click();
+    const foundryMode = _DLA_TO_FOUNDRY[mode] || mode;
+    try { game.settings.set("core", "messageMode", foundryMode); } catch(e) {}
     _reportChatModeToUI(mode);
   });
 
