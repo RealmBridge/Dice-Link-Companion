@@ -66,70 +66,6 @@ function numberAndSerialize(messageId, li) {
 function sendCard(messageId, li) {
   const html = numberAndSerialize(messageId, li);
   sendMessage({ type: "chatMessage", messageId, html });
-
-  // Sample ref styles after a delay so the li is in the DOM and all system
-  // hooks have run — getComputedStyle returns empty strings on disconnected elements.
-  setTimeout(() => {
-    const refStyles = sampleRefStyles(li);
-    if (refStyles) sendMessage({ type: "chatRefStyles", messageId, refStyles });
-  }, 300);
-}
-
-// ============================================================================
-// STYLE REFERENCE SAMPLING — DLC-side ground truth for DLA style comparison
-// ============================================================================
-
-const _DIAG_SELECTORS = [
-  '.card-buttons header',
-  '.card-buttons header span',
-  '.pill',
-  '.pill.transparent',
-  '[class*="pip"]',
-  'label[class*="pip"]',
-  '[class*="damage"]',
-  '[class*="targeted"]',
-  '[class*="selected"]',
-  'button',
-  '[data-action]',
-  'i[class]',
-];
-const _DIAG_MAX_PER_SEL = 5;
-
-/**
- * For rich cards (those with card-buttons, pill, or pip elements), read the
- * computed styles of key elements directly from the live Foundry DOM.
- * These values are sent to DLA so it can diff what it renders against the
- * correct Foundry values and log only the mismatches.
- * Returns null for simple cards that lack those elements.
- */
-function sampleRefStyles(li) {
-  if (!li.querySelector('.card-buttons, .pill, [class*="pip"]')) return null;
-  const result = {};
-  for (const sel of _DIAG_SELECTORS) {
-    const els = li.querySelectorAll(sel);
-    if (!els.length) continue;
-    const entries = [];
-    els.forEach((el, i) => {
-      if (i >= _DIAG_MAX_PER_SEL) return;
-      const cs = getComputedStyle(el);
-      const entry = {
-        color:       cs.color,
-        bg:          cs.backgroundColor,
-        borderStyle: cs.borderStyle,
-        borderColor: cs.borderColor,
-        position:    cs.position,
-      };
-      const bp = getComputedStyle(el, '::before');
-      if (bp.content && !['none', '""', 'normal'].includes(bp.content))
-        entry.before = { content: bp.content, fontFamily: bp.fontFamily };
-      const ap = getComputedStyle(el, '::after');
-      if (ap.content && !['none', '""', 'normal'].includes(ap.content))
-        entry.after = { content: ap.content, fontFamily: ap.fontFamily };
-      entries.push(entry);
-    });
-    if (entries.length) result[sel] = entries;
-  }
-  return Object.keys(result).length ? result : null;
 }
 
 // ============================================================================
@@ -457,21 +393,6 @@ async function sendChatSetup() {
     if (val) cssVars[name] = val;
   }
 
-  // Diagnostic: collect computed vars from dnd5e-specific elements so DLA can
-  // compare what it received vs what Foundry actually renders.
-  const dnd5eDiagVars = {};
-  for (const sel of ['.dnd5e2', '.application', '.dnd5e2.themed', '.themed']) {
-    const el = document.querySelector(sel);
-    if (!el) continue;
-    const elComputed = getComputedStyle(el);
-    const found = {};
-    for (const name of varNamesInCss) {
-      const val = elComputed.getPropertyValue(name).trim();
-      if (val) found[name] = val;
-    }
-    if (Object.keys(found).length > 0) dnd5eDiagVars[sel] = found;
-  }
-
   const bodyClasses = Array.from(document.body.classList);
   const rootFontSize = getComputedStyle(document.documentElement).fontSize;
 
@@ -481,21 +402,6 @@ async function sendChatSetup() {
 
   debugChatLog(`sendChatSetup: ${styleTexts.length} style blocks, ${Object.keys(cssVars).length} vars, ${bodyClasses.length} body classes, rootFontSize=${rootFontSize}, sidebarWidth=${sidebarWidth}`);
 
-  // Diagnostic: inspect rules in programmatically-built <style> sheets (0b textContent, cssRules > 0)
-  const programmaticDiagnostic = [];
-  for (let si = 0; si < document.styleSheets.length; si++) {
-    const sheet = document.styleSheets[si];
-    if (sheet.href) continue;
-    const textLen = sheet.ownerNode?.textContent?.length ?? 0;
-    if (textLen > 0) continue;
-    let rules = [];
-    try { rules = Array.from(sheet.cssRules || []); } catch (e) { continue; }
-    if (rules.length === 0) continue;
-    for (let ri = 0; ri < rules.length; ri++) {
-      programmaticDiagnostic.push({ si, ri, text: (rules[ri].cssText || '').substring(0, 200) });
-    }
-  }
-
   let interfaceTheme = '';
   try {
     const uiConfig = game.settings.get('core', 'uiConfig');
@@ -504,7 +410,7 @@ async function sendChatSetup() {
   if (!interfaceTheme) {
     interfaceTheme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
-  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, programmaticDiagnostic, dnd5eDiagVars, interfaceTheme });
+  sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, interfaceTheme });
 }
 
 // ============================================================================
@@ -565,27 +471,9 @@ function _watchFoundryChatMode() {
  * Register the renderChatMessageHTML hook to forward new messages to DLA.
  * Called once during module initialisation.
  */
-let _stylesheetSnapshotSent = false;
-
 export function setupChatLog() {
   Hooks.on("renderChatMessageHTML", (message, element) => {
     if (!getConnectionStatus()) return;
-
-    // One-shot: snapshot all stylesheets at first message render to detect late-loading CSS
-    if (!_stylesheetSnapshotSent) {
-      _stylesheetSnapshotSent = true;
-      const sheets = [];
-      for (let i = 0; i < document.styleSheets.length; i++) {
-        const s = document.styleSheets[i];
-        const href = s.href ? s.href.substring(0, 120) : null;
-        const tag = s.ownerNode?.tagName ?? 'null';
-        const textLen = s.ownerNode?.textContent?.length ?? -1;
-        let rulesCount = -1;
-        try { rulesCount = s.cssRules?.length ?? -1; } catch (e) { rulesCount = -2; }
-        sheets.push({ i, tag, href, textLen, rulesCount });
-      }
-      sendMessage({ type: 'chatDiagnostic', event: 'firstMessageSheets', sheets });
-    }
 
     // Skip messages older than 2 minutes — treat as historical re-renders, not new
     if (message.timestamp && (Date.now() - message.timestamp) > 120000) {
