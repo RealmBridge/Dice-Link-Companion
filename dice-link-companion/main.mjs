@@ -459,8 +459,8 @@ Hooks.once("ready", async () => {
     setDiceResultCallback((rollId, results) => {
       debug("Phase B: Dice results from DLA", JSON.stringify({ rollId, resultCount: results.length, results }));
 
-      // Find the Foundry roll resolver in the DOM
-      const resolver = document.querySelector('.roll-resolver, [data-application-part="resolver"], dialog.application');
+      // Use the stored resolver reference rather than a DOM search, which could find stale resolvers
+      const resolver = getMirroredDialog()?.element;
 
       if (!resolver) {
         debug("No roll resolver found in DOM for dice injection");
