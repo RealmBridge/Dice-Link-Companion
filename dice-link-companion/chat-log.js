@@ -61,11 +61,39 @@ function numberAndSerialize(messageId, li) {
 }
 
 /**
+ * Extract structured roll data from a Foundry ChatMessage for stats recording.
+ * Returns null if the message contains no dice rolls.
+ */
+function extractRollData(message) {
+  if (!message?.rolls?.length) return null;
+  try {
+    return {
+      speaker: message.speaker?.alias || null,
+      flavor: message.flavor || null,
+      rolls: message.rolls.map(roll => ({
+        formula: roll.formula,
+        total: roll.total,
+        dice: (roll.dice || []).map(die => ({
+          faces: die.faces,
+          results: (die.results || []).map(r => ({
+            result: r.result,
+            active: r.active === true,
+            discarded: r.discarded === true
+          }))
+        }))
+      }))
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * Serialize and send the current state of a card to DLA.
  */
-function sendCard(messageId, li) {
+function sendCard(messageId, li, rollData) {
   const html = numberAndSerialize(messageId, li);
-  sendMessage({ type: "chatMessage", messageId, html });
+  sendMessage({ type: "chatMessage", messageId, html, rollData: rollData ?? null });
 }
 
 // ============================================================================
@@ -86,17 +114,18 @@ function disconnectObserver(messageId) {
  * Safe to call multiple times — resets timers if the observer is still running.
  * Disconnects automatically after OBSERVER_TIMEOUT_MS of no mutations.
  */
-function attachObserver(messageId, li) {
+function attachObserver(messageId, li, rollData) {
   let state = _observerMap.get(messageId);
 
   const resetTimers = () => {
     clearTimeout(state.debounceTimer);
     clearTimeout(state.timeoutTimer);
-    state.debounceTimer = setTimeout(() => sendCard(messageId, li), DEBOUNCE_MS);
+    state.debounceTimer = setTimeout(() => sendCard(messageId, li, state.rollData), DEBOUNCE_MS);
     state.timeoutTimer = setTimeout(() => disconnectObserver(messageId), OBSERVER_TIMEOUT_MS);
   };
 
   if (state) {
+    if (rollData != null) state.rollData = rollData;
     resetTimers();
     return;
   }
@@ -110,7 +139,7 @@ function attachObserver(messageId, li) {
   });
   observer.observe(li, { childList: true, subtree: true, attributes: true, characterData: true });
 
-  state = { observer, debounceTimer: null, timeoutTimer: null };
+  state = { observer, debounceTimer: null, timeoutTimer: null, rollData: rollData ?? null };
   _observerMap.set(messageId, state);
 
   // Start the idle timeout immediately
@@ -487,8 +516,9 @@ export function setupChatLog() {
       return;
     }
 
-    sendCard(message.id, li);
-    attachObserver(message.id, li);
+    const rollData = extractRollData(message);
+    sendCard(message.id, li, rollData);
+    attachObserver(message.id, li, rollData);
   });
 
   // Register handler so qwebchannel-client can route chatInteraction signals here
