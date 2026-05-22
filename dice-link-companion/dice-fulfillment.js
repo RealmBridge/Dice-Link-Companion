@@ -207,8 +207,8 @@ export function ensureDSNEnabled() {
   if (!game.modules.get("dice-so-nice")?.active) return;
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    if (s.enabled === false) {
-      game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
+    if (s.visibility === "none") {
+      game.user.setFlag("dice-so-nice", "settings", { ...s, visibility: "all" });
     }
     _dsnEnabledBeforeManual = null;
   } catch (e) {
@@ -220,8 +220,8 @@ export function disableDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    _dsnEnabledBeforeManual = true;
-    game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: false });
+    _dsnEnabledBeforeManual = s.visibility ?? "all";
+    game.user.setFlag("dice-so-nice", "settings", { ...s, visibility: "none" });
   } catch (e) {
     debugError("error in disableDSN:", e);
   }
@@ -229,13 +229,10 @@ export function disableDSN() {
 
 export function restoreDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
-  if (!_dsnEnabledBeforeManual) {
-    _dsnEnabledBeforeManual = null;
-    return;
-  }
+  if (_dsnEnabledBeforeManual === null) return;
   try {
     const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    game.user.setFlag("dice-so-nice", "settings", { ...s, enabled: true });
+    game.user.setFlag("dice-so-nice", "settings", { ...s, visibility: _dsnEnabledBeforeManual });
   } catch (e) {
     debugError("error in restoreDSN:", e);
   }
