@@ -78,7 +78,8 @@ import {
 import {
   debug,
   debugState,
-  debugError
+  debugError,
+  patchResolverForDiagnostics
 } from "./debug.js";
 
 import {
@@ -461,6 +462,7 @@ Hooks.once("ready", async () => {
 
       // Use the stored resolver reference rather than a DOM search, which could find stale resolvers
       const resolver = getMirroredDialog()?.element;
+      patchResolverForDiagnostics(getMirroredDialog()?.app);
 
       if (!resolver) {
         debug("No roll resolver found in DOM for dice injection");

@@ -208,6 +208,45 @@ export function debugChatLog(event, data) {
 }
 
 /**
+ * Patch a RollResolver app instance to log whether _onSubmitForm fires,
+ * what form data it receives, and whether it completes or throws.
+ * Also logs if close() is called without a prior successful submit.
+ * @param {ApplicationV2} resolverApp - The RollResolver ApplicationV2 instance
+ */
+export function patchResolverForDiagnostics(resolverApp) {
+  if (!resolverApp || !DEBUG_ENABLED) return;
+
+  let submitFired = false;
+
+  const origSubmit = resolverApp._onSubmitForm.bind(resolverApp);
+  resolverApp._onSubmitForm = async function(formConfig, event) {
+    submitFired = true;
+    let formDataObj = {};
+    try { formDataObj = new FormDataExtended(this.element).object; } catch(e) {}
+    console.log("[Dice Link Resolver Diag] _onSubmitForm called", JSON.stringify({
+      formDataKeys: Object.keys(formDataObj),
+      formDataValues: formDataObj
+    }));
+    try {
+      await origSubmit(formConfig, event);
+      console.log("[Dice Link Resolver Diag] _onSubmitForm completed successfully");
+    } catch(e) {
+      console.log("[Dice Link Resolver Diag] _onSubmitForm threw", e.message);
+      throw e;
+    }
+  };
+
+  const origClose = resolverApp.close.bind(resolverApp);
+  resolverApp.close = async function(options) {
+    console.log("[Dice Link Resolver Diag] close() called", JSON.stringify({
+      submitHadFired: submitFired,
+      rendered: this.rendered
+    }));
+    return origClose(options);
+  };
+}
+
+/**
  * Log element width measurements to debug stretching
  * @param {string} stage - Stage of measurement (e.g., "content area", "panel", "cloned dialog", "nav")
  * @param {HTMLElement} element - Element to measure
