@@ -79,7 +79,8 @@ import {
   debug,
   debugState,
   debugError,
-  patchResolverForDiagnostics
+  patchResolverForDiagnostics,
+  installErrorDiagnostics
 } from "./debug.js";
 
 import {
@@ -279,7 +280,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
  * Initialize the module - register core settings and hooks
  */
 Hooks.once("init", async () => {
-  // Register core settings (world-scoped, available immediately)
+  installErrorDiagnostics();
   registerCoreSettings();
 });
 

@@ -247,6 +247,42 @@ export function patchResolverForDiagnostics(resolverApp) {
 }
 
 /**
+ * Install global error diagnostics to capture full stack traces for crashes that
+ * occur during roll processing.  Covers two cases:
+ *
+ * 1. Unhandled promise rejections (e.g. "null.rolling" after attack submit).
+ * 2. Errors caught-and-logged by third-party code such as midi-qol's doDamageRoll,
+ *    which calls console.error(message, err) — the stack trace is on the Error object
+ *    but is never printed separately, so it never appears in the DLA log.
+ *
+ * Must be called once at module init before any rolls can occur.
+ */
+export function installErrorDiagnostics() {
+  if (!DEBUG_ENABLED) return;
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const err = event.reason;
+    if (!err) return;
+    console.error(
+      "[Dice Link Error Diag] Unhandled rejection:", err.message ?? String(err),
+      "\nStack:", err.stack ?? "(no stack)"
+    );
+  });
+
+  const _origError = console.error.bind(console);
+  console.error = function(...args) {
+    _origError(...args);
+    for (const arg of args) {
+      if (arg instanceof Error && arg.stack) {
+        _origError("[Dice Link Error Diag] Stack trace:", arg.stack);
+      }
+    }
+  };
+
+  console.log("[Dice Link Error Diag] Error diagnostics installed");
+}
+
+/**
  * Log element width measurements to debug stretching
  * @param {string} stage - Stage of measurement (e.g., "content area", "panel", "cloned dialog", "nav")
  * @param {HTMLElement} element - Element to measure
