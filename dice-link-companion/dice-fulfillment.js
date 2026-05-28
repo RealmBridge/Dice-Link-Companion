@@ -189,54 +189,34 @@ export async function submitMirroredDialog(userChoice) {
 // DSN SUPPRESSION
 // ============================================================================
 
-// Saved DSN enabled state — set when entering manual mode, restored on exit.
-let _dsnEnabledBeforeManual = null;
+// Hook ID for diceSoNiceMessagePreProcess — stored so we can unregister on mode exit.
+let _dsnHookId = null;
 
 // Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
 let _savedDefaultMethod = null;
 
-/**
- * Called once at startup. DSN suppression is now handled directly in
- * applyDiceLinkFulfillment / removeDiceLinkFulfillment via the DSN enabled setting.
- */
 export function setupDSNSuppression() {
-  // No hooks needed — suppression is tied to the mode switch.
+  // No-op — suppression is applied on mode switch.
 }
 
 export function ensureDSNEnabled() {
-  if (!game.modules.get("dice-so-nice")?.active) return;
-  try {
-    const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    if (s.visibility === "none") {
-      game.user.setFlag("dice-so-nice", "settings", { ...s, visibility: "all" });
-    }
-    _dsnEnabledBeforeManual = null;
-  } catch (e) {
-    debugError("error in ensureDSNEnabled:", e);
-  }
+  if (_dsnHookId === null) return;
+  Hooks.off("diceSoNiceMessagePreProcess", _dsnHookId);
+  _dsnHookId = null;
 }
 
 export function disableDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
-  try {
-    const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    _dsnEnabledBeforeManual = s.visibility ?? "all";
-    game.user.setFlag("dice-so-nice", "settings", { ...s, visibility: "none" });
-  } catch (e) {
-    debugError("error in disableDSN:", e);
-  }
+  if (_dsnHookId !== null) return;
+  _dsnHookId = Hooks.on("diceSoNiceMessagePreProcess", (_msgId, eventObj) => {
+    eventObj.willTrigger3DRoll = false;
+  });
 }
 
 export function restoreDSN() {
-  if (!game.modules.get("dice-so-nice")?.active) return;
-  if (_dsnEnabledBeforeManual === null) return;
-  try {
-    const s = game.user.getFlag("dice-so-nice", "settings") ?? {};
-    game.user.setFlag("dice-so-nice", "settings", { ...s, visibility: _dsnEnabledBeforeManual });
-  } catch (e) {
-    debugError("error in restoreDSN:", e);
-  }
-  _dsnEnabledBeforeManual = null;
+  if (_dsnHookId === null) return;
+  Hooks.off("diceSoNiceMessagePreProcess", _dsnHookId);
+  _dsnHookId = null;
 }
 
 // ============================================================================
