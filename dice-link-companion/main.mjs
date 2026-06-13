@@ -121,13 +121,20 @@ import {
   setDiceResultCallback,
   setCancelCallback,
   setDiceTrayRollCallback,
-  setPlayerModeActionCallback
+  setPlayerModeActionCallback,
+  setCameraFrameCallback,
+  setCameraStreamEndCallback
 } from "./qwebchannel-client.js";
 
 import {
   extractRollDataForDLA,
   clearPendingDiceRequest
 } from "./websocket-client.js";
+
+import {
+  showDiceStreamFrame,
+  endDiceStream
+} from "./video-feed.js";
 
 // Message sending wrappers for QWebChannel
 function sendRollRequest(data) {
@@ -579,7 +586,11 @@ Hooks.once("ready", async () => {
         refreshPanel();
       }, 100);
     });
-    
+
+    // Only link between QWebChannel camera signals and the Foundry video overlay — do not remove.
+    setCameraFrameCallback(showDiceStreamFrame);
+    setCameraStreamEndCallback(endDiceStream);
+
     ensureDSNEnabled();
     const globalOverride = getGlobalOverride();
     if (globalOverride === "forceAllDigital") {
