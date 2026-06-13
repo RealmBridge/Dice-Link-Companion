@@ -401,20 +401,14 @@ Hooks.once("ready", async () => {
       
       const dialogRef = getMirroredDialog();
       
-      // Close the hidden Foundry dialog
+      // Close the hidden Foundry dialog — bypass RollResolver.close() to avoid auto-fill
       if (dialogRef?.app) {
         try {
-          dialogRef.app.close({ force: true });
+          Roll.defaultImplementation.RESOLVERS.delete(dialogRef.app.roll);
+          foundry.applications.api.ApplicationV2.prototype.close.call(dialogRef.app, { force: true });
         } catch(e) {
           debug("Error closing dialog app:", e);
         }
-      }
-      
-      // Also try closing via the element directly
-      if (dialogRef?.html) {
-        const el = dialogRef.html instanceof jQuery ? dialogRef.html[0] : dialogRef.html;
-        const closeBtn = el?.querySelector?.('.window-header .close, button[data-action="close"]');
-        if (closeBtn) closeBtn.click();
       }
       
       // Clear all pending state
