@@ -381,4 +381,18 @@ if (DEBUG_ENABLED) {
       "| allInteractive:", allInteractive,
       "| disabledForManualRolls setting:", game.settings.get("dice-so-nice", "disabledForManualRolls"));
   });
+
+  // Patch game.dice3d.renderRolls after ready so we catch every call with a stack trace.
+  // This is the only function that actually starts a DSN animation — if it fires, we'll see exactly what called it.
+  Hooks.once("ready", () => {
+    setTimeout(() => {
+      if (!game.dice3d) return;
+      const _origRenderRolls = game.dice3d.renderRolls.bind(game.dice3d);
+      game.dice3d.renderRolls = function(...args) {
+        console.log("[Dice Link DSN Diag] renderRolls CALLED — stack:", new Error().stack);
+        return _origRenderRolls(...args);
+      };
+      console.log("[Dice Link DSN Diag] renderRolls patched");
+    }, 4000);
+  });
 }
