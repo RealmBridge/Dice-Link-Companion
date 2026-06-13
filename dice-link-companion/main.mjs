@@ -63,7 +63,8 @@ import {
 } from "./mode-application.js";
 
 import {
-  setupDialogMirroring
+  setupDialogMirroring,
+  extractRollDataForDLA
 } from "./dialog-mirroring.js";
 
 import {
@@ -122,10 +123,6 @@ import {
   setCameraStreamEndCallback
 } from "./qwebchannel-client.js";
 
-import {
-  extractRollDataForDLA,
-  clearPendingDiceRequest
-} from "./websocket-client.js";
 
 import {
   showDiceStreamFrame,
@@ -411,7 +408,7 @@ Hooks.once("ready", async () => {
       // Clear all pending state
       setMirroredDialog(null);
       setPendingRollRequest(null);
-      clearPendingDiceRequest();
+
       setDiceEntryCancelled(true);
       setDLAPhase(null);
       refreshPanel();
@@ -465,7 +462,7 @@ Hooks.once("ready", async () => {
 
       if (!resolver) {
         debug("No roll resolver found in DOM for dice injection");
-        clearPendingDiceRequest();
+  
         setMirroredDialog(null);
         setPendingRollRequest(null);
         setDLAPhase(null);
@@ -570,7 +567,7 @@ Hooks.once("ready", async () => {
           }
         }
 
-        clearPendingDiceRequest();
+  
         setMirroredDialog(null);
         setPendingRollRequest(null);
         setDLAPhase(null);
