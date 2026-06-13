@@ -349,4 +349,7 @@ export function debugDSNStatus() {
 
 if (DEBUG_ENABLED) {
   globalThis.debugDSNStatus = debugDSNStatus;
+  // Auto-run DSN diagnostic on ready after a short delay so the DLA connection
+  // and suppression hook registration have time to complete first.
+  Hooks.once("ready", () => setTimeout(debugDSNStatus, 3000));
 }
