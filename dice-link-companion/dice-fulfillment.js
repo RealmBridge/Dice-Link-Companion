@@ -193,6 +193,8 @@ export async function submitMirroredDialog(userChoice) {
 let _savedDefaultMethod = null;
 // Hook ID for the explicit DSN suppression hook — null when not registered.
 let _dsnSuppressionHookId = null;
+// Original showForRoll — saved when we intercept it, restored on disconnect.
+let _origShowForRoll = null;
 
 export function setupDSNSuppression() {
   // No-op — suppression is applied on mode switch.
@@ -205,7 +207,16 @@ export function ensureDSNEnabled() {
 
 export function disableDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
-  if (game.dice3d) game.dice3d.messageHookDisabled = true;
+  if (game.dice3d) {
+    game.dice3d.messageHookDisabled = true;
+    if (_origShowForRoll === null) {
+      _origShowForRoll = game.dice3d.showForRoll.bind(game.dice3d);
+      game.dice3d.showForRoll = function(...args) {
+        if (game.dice3d?.messageHookDisabled) return Promise.resolve(false);
+        return _origShowForRoll(...args);
+      };
+    }
+  }
   if (_dsnSuppressionHookId === null) {
     _dsnSuppressionHookId = Hooks.on("diceSoNiceMessagePreProcess", (_msgId, eventObj) => {
       eventObj.willTrigger3DRoll = false;
@@ -215,7 +226,13 @@ export function disableDSN() {
 
 export function restoreDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
-  if (game.dice3d) game.dice3d.messageHookDisabled = false;
+  if (game.dice3d) {
+    game.dice3d.messageHookDisabled = false;
+    if (_origShowForRoll !== null) {
+      game.dice3d.showForRoll = _origShowForRoll;
+      _origShowForRoll = null;
+    }
+  }
   if (_dsnSuppressionHookId !== null) {
     Hooks.off("diceSoNiceMessagePreProcess", _dsnSuppressionHookId);
     _dsnSuppressionHookId = null;
