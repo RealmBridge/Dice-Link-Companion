@@ -334,17 +334,23 @@ export function debugDSNStatus() {
     return;
   }
 
-  const hookName = "diceSoNiceMessagePreProcess";
-  let registeredCount = "unknown";
-  try {
-    registeredCount = (Hooks._hooks?.[hookName] ?? []).length;
-  } catch (e) { /* Foundry internal API unavailable */ }
-  console.log(prefix, `Hooks registered for '${hookName}':`, registeredCount);
+  // Check the suppression switch that DSN reads before any animation logic runs
+  const messageHookDisabled = game.dice3d?.messageHookDisabled;
+  console.log(prefix, "game.dice3d exists:", !!game.dice3d);
+  console.log(prefix, "messageHookDisabled:", messageHookDisabled);
+  console.log(prefix, "Suppression switch ON:", messageHookDisabled === true);
 
-  const testEvent = { willTrigger3DRoll: true };
-  Hooks.callAll(hookName, "dlc-diag-test", testEvent);
-  console.log(prefix, "After test fire — willTrigger3DRoll:", testEvent.willTrigger3DRoll);
-  console.log(prefix, "Suppression working:", testEvent.willTrigger3DRoll === false);
+  // Check the disabledForManualRolls setting (second suppression path in DSN)
+  try {
+    const disabledForManualRolls = game.settings.get("dice-so-nice", "disabledForManualRolls");
+    console.log(prefix, "disabledForManualRolls setting:", disabledForManualRolls);
+  } catch (e) {
+    console.log(prefix, "Could not read disabledForManualRolls:", e.message);
+  }
+
+  // Check that the dice-link fulfillment method is registered with interactive:true
+  const diceLink = CONFIG.Dice.fulfillment?.methods?.["dice-link"];
+  console.log(prefix, "dice-link method registered:", !!diceLink, "interactive:", diceLink?.interactive);
 }
 
 if (DEBUG_ENABLED) {
