@@ -6,10 +6,6 @@
 
 import {
   MODULE_ID,
-  MODULE_VERSION,
-  REALM_BRIDGE_URL,
-  LOGO_URL,
-  LOGO_SQUARE_URL,
   ASYNC_OPERATION_DELAY_MS
 } from "./constants.js";
 
