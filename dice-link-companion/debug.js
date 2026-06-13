@@ -383,7 +383,6 @@ if (DEBUG_ENABLED) {
   });
 
   // Patch game.dice3d.renderRolls after ready so we catch every call with a stack trace.
-  // This is the only function that actually starts a DSN animation — if it fires, we'll see exactly what called it.
   Hooks.once("ready", () => {
     setTimeout(() => {
       if (!game.dice3d) return;
@@ -394,5 +393,12 @@ if (DEBUG_ENABLED) {
       };
       console.log("[Dice Link DSN Diag] renderRolls patched");
     }, 4000);
+  });
+
+  // Catch direct showForRoll calls — these bypass renderRolls and messageHookDisabled entirely.
+  // diceSoNiceRollStart fires from inside showForRoll before any animation runs.
+  Hooks.on("diceSoNiceRollStart", (messageID, context) => {
+    console.log("[Dice Link DSN Diag] diceSoNiceRollStart CALLED — messageID:", messageID,
+      "stack:", new Error().stack);
   });
 }
