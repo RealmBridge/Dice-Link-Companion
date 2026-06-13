@@ -363,42 +363,6 @@ if (DEBUG_ENABLED) {
   // Registered before disableDSN() so we capture willTrigger3DRoll before it is modified.
   Hooks.on("diceSoNiceMessagePreProcess", (msgId, eventObj) => {
     console.log("[Dice Link DSN Diag] diceSoNiceMessagePreProcess fired — msgId:", msgId,
-      "willTrigger3DRoll:", eventObj.willTrigger3DRoll,
-      "messageHookDisabled:", game.dice3d?.messageHookDisabled);
-  });
-
-  // Log when any roll chat message is created — captures DSN state and die methods
-  // at the exact moment DSN decides whether to animate.
-  Hooks.on("createChatMessage", (msg) => {
-    if (!msg.isRoll) return;
-    const hookDisabled = game.dice3d?.messageHookDisabled;
-    const methods = msg.rolls.flatMap(r => r.dice.map(t => t.method ?? "(undefined)"));
-    const fulfillmentMethods = CONFIG.Dice.fulfillment?.methods ?? {};
-    const allInteractive = methods.length > 0 && methods.every(m => fulfillmentMethods[m]?.interactive === true);
-    console.log("[Dice Link DSN Diag] createChatMessage (roll) —",
-      "messageHookDisabled:", hookDisabled,
-      "| die methods:", methods,
-      "| allInteractive:", allInteractive,
-      "| disabledForManualRolls setting:", game.settings.get("dice-so-nice", "disabledForManualRolls"));
-  });
-
-  // Patch game.dice3d.renderRolls after ready so we catch every call with a stack trace.
-  Hooks.once("ready", () => {
-    setTimeout(() => {
-      if (!game.dice3d) return;
-      const _origRenderRolls = game.dice3d.renderRolls.bind(game.dice3d);
-      game.dice3d.renderRolls = function(...args) {
-        console.log("[Dice Link DSN Diag] renderRolls CALLED — stack:", new Error().stack);
-        return _origRenderRolls(...args);
-      };
-      console.log("[Dice Link DSN Diag] renderRolls patched");
-    }, 4000);
-  });
-
-  // Catch direct showForRoll calls — these bypass renderRolls and messageHookDisabled entirely.
-  // diceSoNiceRollStart fires from inside showForRoll before any animation runs.
-  Hooks.on("diceSoNiceRollStart", (messageID, context) => {
-    console.log("[Dice Link DSN Diag] diceSoNiceRollStart CALLED — messageID:", messageID,
-      "stack:", new Error().stack);
+      "willTrigger3DRoll:", eventObj.willTrigger3DRoll);
   });
 }
