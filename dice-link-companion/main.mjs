@@ -129,7 +129,8 @@ import {
 
 import {
   showDiceStreamFrame,
-  endDiceStream
+  endDiceStream,
+  getStreamCanvasWebP
 } from "./video-feed.js";
 
 // Message sending wrappers for QWebChannel
@@ -577,9 +578,19 @@ Hooks.once("ready", async () => {
       }, 100);
     });
 
-    // Only link between QWebChannel camera signals and the Foundry video overlay — do not remove.
-    setCameraFrameCallback(showDiceStreamFrame);
-    setCameraStreamEndCallback(endDiceStream);
+    // Display frame locally and broadcast to all other players via game.socket.
+    // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
+    setCameraFrameCallback((frameB64) => {
+      showDiceStreamFrame(frameB64);
+      const networkFrame = getStreamCanvasWebP();
+      if (networkFrame) {
+        game.socket.emit(`module.${MODULE_ID}`, { action: "cameraFrame", frameB64: networkFrame });
+      }
+    });
+    setCameraStreamEndCallback(() => {
+      endDiceStream();
+      game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd" });
+    });
 
     ensureDSNEnabled();
     const globalOverride = getGlobalOverride();
