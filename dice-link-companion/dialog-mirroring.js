@@ -4,7 +4,7 @@
  */
 
 import { getPlayerMode, getGlobalOverride } from "./settings.js";
-import { debug, debugError, debugState, debugResolverCancel, debugResolverClosure, debugCloning, debugButtonDetection } from "./debug.js";
+import { debug, debugError, debugCloning, debugButtonDetection } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
 
 // Wrapper for sendDiceRequest to use QWebChannel

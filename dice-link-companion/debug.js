@@ -60,27 +60,6 @@ export function debugFulfillment(...args) {
 }
 
 /**
- * Log resolver cancellation
- * @param {string} method - Method used to cancel (e.g., "resolveResult", "reject", etc.)
- * @param {any} data - Associated data or result
- */
-export function debugResolverCancel(method, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Resolver Cancel]", `Used ${method}:`, data);
-  }
-}
-
-/**
- * Log resolver closure sequence
- * @param {string} stage - Stage of closure (e.g., "resolveResult called", "closing app")
- */
-export function debugResolverClosure(stage) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Resolver Closure]", stage);
-  }
-}
-
-/**
  * Log HTML cloning operations for mirrored dialogs
  * @param {string} stage - Stage of cloning operation
  * @param {any} data - Associated data (element info, HTML length, etc.)
@@ -114,29 +93,6 @@ export function debugPanelInjection(stage, data) {
 }
 
 /**
- * Log template/HTML generation for pending rolls
- * @param {string} stage - Stage of generation (e.g., "generatePendingRollHTML called", "using clonedHTML", "fallback")
- * @param {any} data - Associated data (roll object properties, HTML preview, etc.)
- */
-export function debugTemplateGeneration(stage, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Template]", stage, data);
-  }
-}
-
-/**
- * Log section generation and HTML wrapping
- * @param {string} section - Section name (e.g., "Roll Request Section")
- * @param {string} stage - Stage (e.g., "generating", "wrapping", "complete")
- * @param {any} data - Associated data (content length, HTML preview, structure, etc.)
- */
-export function debugSectionGeneration(section, stage, data) {
-  if (DEBUG_ENABLED) {
-    console.log(`[Dice Link ${section}]`, stage, data);
-  }
-}
-
-/**
  * Log CSS computed styles for elements to debug visibility issues
  * @param {string} selector - CSS selector or element description
  * @param {HTMLElement} element - Element to inspect
@@ -156,17 +112,6 @@ export function debugComputedStyles(selector, element) {
       zIndex: styles.zIndex,
       pointerEvents: styles.pointerEvents
     });
-  }
-}
-
-/**
- * Log cloned button click events
- * @param {string} action - Button action (e.g., "advantage", "normal", "disadvantage")
- * @param {any} data - Associated data (button element info, pending roll state, etc.)
- */
-export function debugClonedButtonClick(action, data) {
-  if (DEBUG_ENABLED) {
-    console.log(`[Dice Link Cloned Button]`, action, data);
   }
 }
 
