@@ -189,9 +189,6 @@ export async function submitMirroredDialog(userChoice) {
 // DSN SUPPRESSION
 // ============================================================================
 
-// Hook ID for diceSoNiceMessagePreProcess — stored so we can unregister on mode exit.
-let _dsnHookId = null;
-
 // Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
 let _savedDefaultMethod = null;
 
@@ -200,23 +197,18 @@ export function setupDSNSuppression() {
 }
 
 export function ensureDSNEnabled() {
-  if (_dsnHookId === null) return;
-  Hooks.off("diceSoNiceMessagePreProcess", _dsnHookId);
-  _dsnHookId = null;
+  if (!game.modules.get("dice-so-nice")?.active) return;
+  if (game.dice3d) game.dice3d.messageHookDisabled = false;
 }
 
 export function disableDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
-  if (_dsnHookId !== null) return;
-  _dsnHookId = Hooks.on("diceSoNiceMessagePreProcess", (_msgId, eventObj) => {
-    eventObj.willTrigger3DRoll = false;
-  });
+  if (game.dice3d) game.dice3d.messageHookDisabled = true;
 }
 
 export function restoreDSN() {
-  if (_dsnHookId === null) return;
-  Hooks.off("diceSoNiceMessagePreProcess", _dsnHookId);
-  _dsnHookId = null;
+  if (!game.modules.get("dice-so-nice")?.active) return;
+  if (game.dice3d) game.dice3d.messageHookDisabled = false;
 }
 
 // ============================================================================
