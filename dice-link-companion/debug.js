@@ -293,7 +293,7 @@ export function debugElementDimensions(stage, element, label = "") {
     const rect = element.getBoundingClientRect();
     const computed = window.getComputedStyle(element);
     const inlineStyle = element.getAttribute("style") || "(none)";
-    
+
     console.log(`[Dice Link Dimensions] ${stage} ${label}`, {
       offsetWidth: element.offsetWidth,
       offsetHeight: element.offsetHeight,
@@ -314,4 +314,39 @@ export function debugElementDimensions(stage, element, label = "") {
       tagName: element.tagName
     });
   }
+}
+
+/**
+ * Check whether Dice So Nice suppression is currently working on this client.
+ * Reports: whether DSN is active, how many hooks are registered for the pre-process
+ * event, and whether firing a test event actually suppresses willTrigger3DRoll.
+ *
+ * Call from the Foundry CMD prompt: debugDSNStatus()
+ */
+export function debugDSNStatus() {
+  if (!DEBUG_ENABLED) return;
+  const prefix = "[Dice Link DSN Diag]";
+
+  const dsnActive = !!game.modules.get("dice-so-nice")?.active;
+  console.log(prefix, "DSN active:", dsnActive);
+  if (!dsnActive) {
+    console.log(prefix, "DSN is not active — suppression not applicable");
+    return;
+  }
+
+  const hookName = "diceSoNiceMessagePreProcess";
+  let registeredCount = "unknown";
+  try {
+    registeredCount = (Hooks._hooks?.[hookName] ?? []).length;
+  } catch (e) { /* Foundry internal API unavailable */ }
+  console.log(prefix, `Hooks registered for '${hookName}':`, registeredCount);
+
+  const testEvent = { willTrigger3DRoll: true };
+  Hooks.callAll(hookName, "dlc-diag-test", testEvent);
+  console.log(prefix, "After test fire — willTrigger3DRoll:", testEvent.willTrigger3DRoll);
+  console.log(prefix, "Suppression working:", testEvent.willTrigger3DRoll === false);
+}
+
+if (DEBUG_ENABLED) {
+  globalThis.debugDSNStatus = debugDSNStatus;
 }
