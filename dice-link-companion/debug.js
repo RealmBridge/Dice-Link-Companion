@@ -352,4 +352,11 @@ if (DEBUG_ENABLED) {
   // Auto-run DSN diagnostic on ready after a short delay so the DLA connection
   // and suppression hook registration have time to complete first.
   Hooks.once("ready", () => setTimeout(debugDSNStatus, 3000));
+  // Log every time DSN fires diceSoNiceMessagePreProcess during a real roll.
+  // Registered before disableDSN() so we capture willTrigger3DRoll before it is modified.
+  // If this never appears in the log during a roll, DSN is bypassing the hook entirely.
+  Hooks.on("diceSoNiceMessagePreProcess", (msgId, eventObj) => {
+    console.log("[Dice Link DSN Diag] diceSoNiceMessagePreProcess fired — msgId:", msgId,
+      "willTrigger3DRoll:", eventObj.willTrigger3DRoll);
+  });
 }
