@@ -358,11 +358,27 @@ if (DEBUG_ENABLED) {
   // Auto-run DSN diagnostic on ready after a short delay so the DLA connection
   // and suppression hook registration have time to complete first.
   Hooks.once("ready", () => setTimeout(debugDSNStatus, 3000));
+
   // Log every time DSN fires diceSoNiceMessagePreProcess during a real roll.
   // Registered before disableDSN() so we capture willTrigger3DRoll before it is modified.
-  // If this never appears in the log during a roll, DSN is bypassing the hook entirely.
   Hooks.on("diceSoNiceMessagePreProcess", (msgId, eventObj) => {
     console.log("[Dice Link DSN Diag] diceSoNiceMessagePreProcess fired — msgId:", msgId,
-      "willTrigger3DRoll:", eventObj.willTrigger3DRoll);
+      "willTrigger3DRoll:", eventObj.willTrigger3DRoll,
+      "messageHookDisabled:", game.dice3d?.messageHookDisabled);
+  });
+
+  // Log when any roll chat message is created — captures DSN state and die methods
+  // at the exact moment DSN decides whether to animate.
+  Hooks.on("createChatMessage", (msg) => {
+    if (!msg.isRoll) return;
+    const hookDisabled = game.dice3d?.messageHookDisabled;
+    const methods = msg.rolls.flatMap(r => r.dice.map(t => t.method ?? "(undefined)"));
+    const fulfillmentMethods = CONFIG.Dice.fulfillment?.methods ?? {};
+    const allInteractive = methods.length > 0 && methods.every(m => fulfillmentMethods[m]?.interactive === true);
+    console.log("[Dice Link DSN Diag] createChatMessage (roll) —",
+      "messageHookDisabled:", hookDisabled,
+      "| die methods:", methods,
+      "| allInteractive:", allInteractive,
+      "| disabledForManualRolls setting:", game.settings.get("dice-so-nice", "disabledForManualRolls"));
   });
 }
