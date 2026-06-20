@@ -115,8 +115,8 @@ class BreakOverlayApp extends ApplicationV2 {
                     el.classList.add('break-over');
                     el.style.fontSize = '60px';
                     el.style.whiteSpace = 'nowrap';
-                    el.style.margin = '0 -12px';
                 }
+                this.element?.classList.add('break-over-active');
             } else {
                 if (el) el.textContent = _formatTime(this.#remaining);
             }
