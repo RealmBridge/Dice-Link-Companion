@@ -120,7 +120,8 @@ import {
   setDiceTrayRollCallback,
   setPlayerModeActionCallback,
   setCameraFrameCallback,
-  setCameraStreamEndCallback
+  setCameraStreamEndCallback,
+  setStartBreakCallback
 } from "./qwebchannel-client.js";
 
 
@@ -577,6 +578,11 @@ Hooks.once("ready", async () => {
 
     // Display frame locally and broadcast to all other players via game.socket.
     // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
+    setStartBreakCallback((data) => {
+      debug("startBreak received from DLA", data);
+      // TODO: implement Foundry-side break (pause, overlay, player checklist)
+    });
+
     setCameraFrameCallback((frameB64) => {
       showDiceStreamFrame(frameB64);
       const networkFrame = getStreamCanvasWebP();

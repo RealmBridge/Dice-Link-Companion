@@ -26,6 +26,7 @@ let cameraStreamEndCallback = null;
 let chatInteractionCallback = null;
 let chatCommandCallback = null;
 let chatVisibilityCallback = null;
+let startBreakCallback = null;
 
 // ============================================================================
 // INITIALIZATION - Check for QWebChannel / DLA Interface
@@ -271,6 +272,15 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
+    // Start break from GM timer
+    if (dlaInterface.startBreakReady) {
+      dlaInterface.startBreakReady.connect((data) => {
+        debugQWebChannel("Received startBreak signal", {});
+        const message = JSON.parse(data);
+        if (startBreakCallback) startBreakCallback(message);
+      });
+    }
+
     // Connection health check - ping/pong mechanism
     if (dlaInterface.connectionPingReady) {
       dlaInterface.connectionPingReady.connect(() => {
@@ -423,6 +433,10 @@ export function setChatCommandCallback(callback) {
 
 export function setChatVisibilityCallback(callback) {
   chatVisibilityCallback = callback;
+}
+
+export function setStartBreakCallback(callback) {
+  startBreakCallback = callback;
 }
 
 export function onConnectionChange(callback) {
