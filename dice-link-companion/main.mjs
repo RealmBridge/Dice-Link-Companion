@@ -621,12 +621,22 @@ Hooks.once("ready", async () => {
         } else {
           effectiveMode = getPlayerMode(user.id);
         }
+        const actor = user.character;
+        let portraitUrl = null;
+        if (actor?.img) {
+          const img = actor.img;
+          portraitUrl = (img.startsWith('http://') || img.startsWith('https://'))
+            ? img
+            : window.location.origin + foundry.utils.getRoute(img);
+        }
         players.push({
           id: user.id,
           name: user.name,
           mode: effectiveMode,
           isGM: user.isGM,
-          isSelf: user.id === game.user?.id
+          isSelf: user.id === game.user?.id,
+          characterName: actor?.name || null,
+          portraitUrl
         });
       }
       // Only include pending requests - DLA will only show these to GMs
