@@ -50,6 +50,17 @@ class BreakOverlayApp extends ApplicationV2 {
         content.replaceChildren(result);
     }
 
+    async _onFirstRender(context, options) {
+        await super._onFirstRender(context, options);
+        const header = this.element?.querySelector('.window-header');
+        if (header && !header.querySelector('.dlc-break-title-logo')) {
+            const img = document.createElement('img');
+            img.src = `modules/${MODULE_ID}/assets/DL_Logo_No_Background_small.ico`;
+            img.className = 'dlc-break-title-logo';
+            header.prepend(img);
+        }
+    }
+
     _onRender(context, options) {
         const el = this.element;
 
@@ -96,14 +107,15 @@ class BreakOverlayApp extends ApplicationV2 {
         this.#timer = setInterval(() => {
             this.#remaining -= 1;
             const el = this.element?.querySelector('#dlc-break-countdown');
-            if (el) el.textContent = _formatTime(this.#remaining);
             if (this.#remaining <= 0) {
                 clearInterval(this.#timer);
                 this.#timer = null;
-                if (game.user?.isGM) {
-                    game.socket.emit(`module.${MODULE_ID}`, { action: "breakEnd" });
-                    endBreak(true);
+                if (el) {
+                    el.textContent = 'BREAK OVER';
+                    el.classList.add('break-over');
                 }
+            } else {
+                if (el) el.textContent = _formatTime(this.#remaining);
             }
         }, 1000);
     }
@@ -162,7 +174,7 @@ export function handleStartBreak(data) {
     const durationMinutes = data.durationMinutes || 10;
     debug("handleStartBreak", { durationMinutes });
 
-    if (!game.paused) game.togglePause(true);
+    if (!game.paused) game.togglePause(true, { broadcast: true });
 
     const players = [...game.users]
         .filter(u => u.active)
@@ -206,7 +218,7 @@ export function endBreak(unpause = true) {
         _breakApp = null;
     }
     if (unpause && game.user?.isGM && game.paused) {
-        game.togglePause(false);
+        game.togglePause(false, { broadcast: true });
     }
 }
 
