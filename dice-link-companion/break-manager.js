@@ -28,7 +28,7 @@ class BreakOverlayApp extends ApplicationV2 {
             resizable: false,
             minimizable: false,
         },
-        position: { width: 380, height: "auto" }
+        position: { width: 304, height: "auto" }
     };
 
     init(durationMinutes, players) {
