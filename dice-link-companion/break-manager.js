@@ -150,18 +150,22 @@ class BreakOverlayApp extends ApplicationV2 {
 
         return `
             <div class="dlc-break-panel">
-                <div class="dlc-break-countdown" id="dlc-break-countdown">${_formatTime(this.#remaining)}</div>
-                <div class="dlc-break-players">
-                    <div class="dlc-break-players-label">Players</div>
-                    <div class="dlc-break-player-list" id="dlc-break-player-list">
-                        ${playerListHTML}
+                <div class="dlc-break-top">
+                    <div class="dlc-break-countdown" id="dlc-break-countdown">${_formatTime(this.#remaining)}</div>
+                </div>
+                <div class="dlc-break-body">
+                    <div class="dlc-break-players">
+                        <div class="dlc-break-players-label">Players</div>
+                        <div class="dlc-break-player-list" id="dlc-break-player-list">
+                            ${playerListHTML}
+                        </div>
                     </div>
+                    <div class="dlc-break-status-actions">
+                        <button id="dlc-break-back-btn" class="dlc-break-back-btn">I'm Back!</button>
+                        <button id="dlc-break-away-btn" class="dlc-break-away-btn" disabled>Step Away</button>
+                    </div>
+                    ${isGM ? '<button id="dlc-break-end-btn" class="dlc-break-end-btn">End Break</button>' : ''}
                 </div>
-                <div class="dlc-break-status-actions">
-                    <button id="dlc-break-back-btn" class="dlc-break-back-btn">I'm Back!</button>
-                    <button id="dlc-break-away-btn" class="dlc-break-away-btn" disabled>Step Away</button>
-                </div>
-                ${isGM ? '<button id="dlc-break-end-btn" class="dlc-break-end-btn">End Break</button>' : ''}
             </div>
         `;
     }

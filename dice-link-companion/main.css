@@ -1953,10 +1953,23 @@
 .dlc-break-panel {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.dlc-break-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 4px;
+}
+
+.dlc-break-body {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 20px;
-  padding: 16px;
-  width: 100%;
+  padding: 0 16px 16px;
 }
 
 .dlc-break-countdown {
@@ -2095,10 +2108,7 @@
 
 .dlc-break-countdown.break-over {
   color: #e53935;
-  text-align: center;
-  width: 100%;
   white-space: nowrap;
-  margin: 0 -12px;
   animation: dlc-break-over-flash 1.5s step-start infinite;
 }
 
