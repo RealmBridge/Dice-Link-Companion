@@ -2096,7 +2096,9 @@
 .dlc-break-countdown.break-over {
   color: #e53935;
   font-size: 48px;
-  animation: dlc-break-over-flash 1s step-start infinite;
+  text-align: center;
+  width: 100%;
+  animation: dlc-break-over-flash 1.5s step-start infinite;
 }
 
 /* Form and all child containers - natural width with max-width constraint */
