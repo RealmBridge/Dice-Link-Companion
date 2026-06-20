@@ -298,6 +298,24 @@ export function debugDSNStatus() {
   console.log(prefix, "dice-link method registered:", !!diceLink, "interactive:", diceLink?.interactive);
 }
 
+/**
+ * Diagnose why handleStartBreak may not be working.
+ * Logs all state relevant to the break pipeline before handleStartBreak is entered.
+ */
+export function diagnoseBreakStart() {
+  const prefix = "[Dice Link Break Diag]";
+  console.log(prefix, "game.user exists:", !!game.user);
+  console.log(prefix, "game.user.id:", game.user?.id);
+  console.log(prefix, "game.user.role:", game.user?.role);
+  console.log(prefix, "game.user.isGM:", game.user?.isGM);
+  console.log(prefix, "CONST.USER_ROLES.GAMEMASTER:", CONST?.USER_ROLES?.GAMEMASTER);
+  console.log(prefix, "game.paused:", game.paused);
+  console.log(prefix, "game.socket exists:", !!game.socket);
+  console.log(prefix, "game.users count:", game.users?.size);
+  const existingOverlay = document.getElementById('dlc-break-overlay');
+  console.log(prefix, "existing #dlc-break-overlay in DOM:", !!existingOverlay);
+}
+
 if (DEBUG_ENABLED) {
   globalThis.debugDSNStatus = debugDSNStatus;
   // Auto-run DSN diagnostic on ready after a short delay so the DLA connection

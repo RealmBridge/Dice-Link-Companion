@@ -77,7 +77,8 @@ import {
   debugState,
   debugError,
   patchResolverForDiagnostics,
-  installErrorDiagnostics
+  installErrorDiagnostics,
+  diagnoseBreakStart
 } from "./debug.js";
 
 import {
@@ -582,6 +583,7 @@ Hooks.once("ready", async () => {
     // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
     setStartBreakCallback((data) => {
       debug("startBreak received from DLA", data);
+      diagnoseBreakStart();
       handleStartBreak(data);
     });
 
