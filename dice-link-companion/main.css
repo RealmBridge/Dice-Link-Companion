@@ -2098,13 +2098,8 @@
   text-align: center;
   width: 100%;
   white-space: nowrap;
+  margin: 0 -12px;
   animation: dlc-break-over-flash 1.5s step-start infinite;
-}
-
-.dlc-break-app.break-over-active .window-content,
-.dlc-break-app.break-over-active .dlc-break-panel {
-  padding-left: 4px;
-  padding-right: 4px;
 }
 
 /* Form and all child containers - natural width with max-width constraint */
