@@ -2095,9 +2095,9 @@
 
 .dlc-break-countdown.break-over {
   color: #e53935;
-  font-size: 48px;
   text-align: center;
   width: 100%;
+  white-space: nowrap;
   animation: dlc-break-over-flash 1.5s step-start infinite;
 }
 
