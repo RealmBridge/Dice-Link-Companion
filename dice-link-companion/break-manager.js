@@ -113,7 +113,7 @@ class BreakOverlayApp extends ApplicationV2 {
                 if (el) {
                     el.textContent = 'BREAK OVER';
                     el.classList.add('break-over');
-                    el.style.fontSize = '72px';
+                    el.style.fontSize = '60px';
                     el.style.whiteSpace = 'nowrap';
                 }
             } else {
