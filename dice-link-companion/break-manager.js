@@ -1,117 +1,211 @@
 /**
  * Break Manager
- * Handles GM-initiated session breaks: Foundry pause, overlay, player checklist.
+ * Handles GM-initiated session breaks: Foundry pause, draggable window, player checklist.
  */
 
 import { MODULE_ID } from "./constants.js";
 import { debug } from "./debug.js";
 
-let _breakOverlay = null;
-let _breakTimer = null;
-let _playerBackStatus = {};  // userId -> boolean
-let _breakPlayers = [];      // ordered list, set in showBreakOverlay
+const { ApplicationV2 } = foundry.applications.api;
+
+let _breakApp = null;
+
+// ============================================================================
+// APPLICATION
+// ============================================================================
+
+class BreakOverlayApp extends ApplicationV2 {
+    #players = [];
+    #playerBackStatus = {};
+    #remaining = 0;
+    #timer = null;
+
+    static DEFAULT_OPTIONS = {
+        id: "dlc-break-overlay",
+        classes: ["dlc-break-app"],
+        window: {
+            title: "☕ Break Time!",
+            resizable: false,
+            minimizable: false,
+        },
+        position: { width: 380, height: "auto" }
+    };
+
+    init(durationMinutes, players) {
+        this.#players = players;
+        this.#playerBackStatus = {};
+        for (const p of players) this.#playerBackStatus[p.id] = false;
+        this.#remaining = durationMinutes * 60;
+    }
+
+    async _prepareContext(options) { return {}; }
+
+    async _renderHTML(context, options) {
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = this.#buildHTML();
+        return wrapper;
+    }
+
+    _replaceHTML(result, content, options) {
+        content.replaceChildren(result);
+    }
+
+    _onRender(context, options) {
+        const el = this.element;
+
+        el.querySelector('#dlc-break-back-btn')?.addEventListener('click', () => {
+            markPlayerBack(game.user.id, true);
+        });
+        el.querySelector('#dlc-break-away-btn')?.addEventListener('click', () => {
+            markPlayerAway(game.user.id, true);
+        });
+        if (game.user?.isGM) {
+            el.querySelector('#dlc-break-end-btn')?.addEventListener('click', () => {
+                game.socket.emit(`module.${MODULE_ID}`, { action: "breakEnd" });
+                endBreak(true);
+            });
+        }
+
+        if (!this.#timer) this.#startTimer();
+        this.#refreshSelfButtons();
+    }
+
+    async close(options = {}) {
+        this.stopTimer();
+        if (_breakApp === this) _breakApp = null;
+        return super.close(options);
+    }
+
+    stopTimer() {
+        if (this.#timer) { clearInterval(this.#timer); this.#timer = null; }
+    }
+
+    setPlayerBack(userId) {
+        this.#playerBackStatus[userId] = true;
+        this.#refreshPlayerList();
+        if (userId === game.user.id) this.#refreshSelfButtons();
+    }
+
+    setPlayerAway(userId) {
+        this.#playerBackStatus[userId] = false;
+        this.#refreshPlayerList();
+        if (userId === game.user.id) this.#refreshSelfButtons();
+    }
+
+    #startTimer() {
+        this.#timer = setInterval(() => {
+            this.#remaining -= 1;
+            const el = this.element?.querySelector('#dlc-break-countdown');
+            if (el) el.textContent = _formatTime(this.#remaining);
+            if (this.#remaining <= 0) {
+                clearInterval(this.#timer);
+                this.#timer = null;
+                if (game.user?.isGM) {
+                    game.socket.emit(`module.${MODULE_ID}`, { action: "breakEnd" });
+                    endBreak(true);
+                }
+            }
+        }, 1000);
+    }
+
+    #refreshPlayerList() {
+        const list = this.element?.querySelector('#dlc-break-player-list');
+        if (list) list.innerHTML = this.#buildPlayerListHTML();
+    }
+
+    #refreshSelfButtons() {
+        const isBack = this.#playerBackStatus[game.user.id] === true;
+        const backBtn = this.element?.querySelector('#dlc-break-back-btn');
+        const awayBtn = this.element?.querySelector('#dlc-break-away-btn');
+        if (backBtn) backBtn.disabled = isBack;
+        if (awayBtn) awayBtn.disabled = !isBack;
+    }
+
+    #buildPlayerListHTML() {
+        return this.#players.map(p => {
+            const isBack = this.#playerBackStatus[p.id] === true;
+            return `<div class="dlc-break-player ${isBack ? 'is-back' : ''}">
+                <span class="dlc-break-player-indicator">${isBack ? '✓' : '…'}</span>
+                <span class="dlc-break-player-name">${p.name}</span>
+            </div>`;
+        }).join('');
+    }
+
+    #buildHTML() {
+        const isGM = game.user?.isGM;
+        const playerListHTML = this.#buildPlayerListHTML();
+
+        return `
+            <div class="dlc-break-panel">
+                <div class="dlc-break-countdown" id="dlc-break-countdown">${_formatTime(this.#remaining)}</div>
+                <div class="dlc-break-players">
+                    <div class="dlc-break-players-label">Players</div>
+                    <div class="dlc-break-player-list" id="dlc-break-player-list">
+                        ${playerListHTML}
+                    </div>
+                </div>
+                <div class="dlc-break-status-actions">
+                    <button id="dlc-break-back-btn" class="dlc-break-back-btn">I'm Back!</button>
+                    <button id="dlc-break-away-btn" class="dlc-break-away-btn" disabled>Step Away</button>
+                </div>
+                ${isGM ? '<button id="dlc-break-end-btn" class="dlc-break-end-btn">End Break</button>' : ''}
+            </div>
+        `;
+    }
+}
 
 // ============================================================================
 // PUBLIC API
 // ============================================================================
 
-/**
- * Called when DLA sends startBreak. GM-only path via setStartBreakCallback.
- */
 export function handleStartBreak(data) {
     if (!game.user?.isGM) return;
     const durationMinutes = data.durationMinutes || 10;
     debug("handleStartBreak", { durationMinutes });
 
-    // Pause Foundry for everyone (broadcast is Foundry's default behaviour)
     if (!game.paused) game.togglePause(true);
 
-    // Build player list from currently active users
     const players = [...game.users]
         .filter(u => u.active)
         .map(u => ({ id: u.id, name: u.name }));
 
-    // Broadcast break start to all clients via module socket
     game.socket.emit(`module.${MODULE_ID}`, {
         action: "breakStart",
         durationMinutes,
         players
     });
 
-    // Show overlay on GM's own screen
     showBreakOverlay(durationMinutes, players);
 }
 
-/**
- * Show the break overlay. Called on every client via socket, and by GM directly.
- */
 export function showBreakOverlay(durationMinutes, players) {
-    endBreak(false);  // clean up any stale overlay without unpausing
+    endBreak(false);
 
-    _breakPlayers = players;
-    _playerBackStatus = {};
-    for (const p of players) _playerBackStatus[p.id] = false;
-
-    let remaining = durationMinutes * 60;
-
-    _breakOverlay = document.createElement('div');
-    _breakOverlay.id = 'dlc-break-overlay';
-    _breakOverlay.innerHTML = _buildHTML(remaining, players);
-    document.body.appendChild(_breakOverlay);
-
-    // "I'm Back!" — marks self and broadcasts to all other clients
-    _breakOverlay.querySelector('#dlc-break-back-btn')?.addEventListener('click', () => {
-        markPlayerBack(game.user.id, true);
-    });
-
-    // GM-only "End Break" button
-    if (game.user?.isGM) {
-        _breakOverlay.querySelector('#dlc-break-end-btn')?.addEventListener('click', () => {
-            game.socket.emit(`module.${MODULE_ID}`, { action: "breakEnd" });
-            endBreak(true);
-        });
-    }
-
-    // Countdown — GM ends break when timer reaches zero
-    _breakTimer = setInterval(() => {
-        remaining -= 1;
-        const el = _breakOverlay?.querySelector('#dlc-break-countdown');
-        if (el) el.textContent = _formatTime(remaining);
-        if (remaining <= 0) {
-            clearInterval(_breakTimer);
-            _breakTimer = null;
-            if (game.user?.isGM) {
-                game.socket.emit(`module.${MODULE_ID}`, { action: "breakEnd" });
-                endBreak(true);
-            }
-        }
-    }, 1000);
+    _breakApp = new BreakOverlayApp();
+    _breakApp.init(durationMinutes, players);
+    _breakApp.render(true);
 }
 
-/**
- * Mark a player as back and refresh the overlay checklist.
- * @param {string} userId
- * @param {boolean} isSelf - true only when this player is clicking their own button
- */
 export function markPlayerBack(userId, isSelf = false) {
-    _playerBackStatus[userId] = true;
-    _refreshPlayerList();
+    _breakApp?.setPlayerBack(userId);
     if (isSelf) {
-        const btn = _breakOverlay?.querySelector('#dlc-break-back-btn');
-        if (btn) { btn.disabled = true; btn.textContent = "See you soon! ☕"; }
         game.socket.emit(`module.${MODULE_ID}`, { action: "breakPlayerBack", userId });
     }
 }
 
-/**
- * Remove the break overlay and optionally unpause Foundry.
- * Only the GM should call with unpause=true.
- */
+export function markPlayerAway(userId, isSelf = false) {
+    _breakApp?.setPlayerAway(userId);
+    if (isSelf) {
+        game.socket.emit(`module.${MODULE_ID}`, { action: "breakPlayerAway", userId });
+    }
+}
+
 export function endBreak(unpause = true) {
-    if (_breakTimer) { clearInterval(_breakTimer); _breakTimer = null; }
-    if (_breakOverlay) { _breakOverlay.remove(); _breakOverlay = null; }
-    _playerBackStatus = {};
-    _breakPlayers = [];
+    if (_breakApp) {
+        _breakApp.stopTimer();
+        _breakApp.close({ force: true });
+        _breakApp = null;
+    }
     if (unpause && game.user?.isGM && game.paused) {
         game.togglePause(false);
     }
@@ -120,49 +214,6 @@ export function endBreak(unpause = true) {
 // ============================================================================
 // PRIVATE HELPERS
 // ============================================================================
-
-function _refreshPlayerList() {
-    if (!_breakOverlay) return;
-    const list = _breakOverlay.querySelector('#dlc-break-player-list');
-    if (list) list.innerHTML = _buildPlayerListHTML();
-}
-
-function _buildPlayerListHTML() {
-    return _breakPlayers.map(p => {
-        const isBack = _playerBackStatus[p.id] === true;
-        return `<div class="dlc-break-player ${isBack ? 'is-back' : ''}">
-            <span class="dlc-break-player-indicator">${isBack ? '✓' : '…'}</span>
-            <span class="dlc-break-player-name">${p.name}</span>
-        </div>`;
-    }).join('');
-}
-
-function _buildHTML(remaining, players) {
-    const isGM = game.user?.isGM;
-    const playerListHTML = players.map(p =>
-        `<div class="dlc-break-player">
-            <span class="dlc-break-player-indicator">…</span>
-            <span class="dlc-break-player-name">${p.name}</span>
-        </div>`
-    ).join('');
-
-    return `
-        <div class="dlc-break-panel">
-            <div class="dlc-break-title">☕ Break Time!</div>
-            <div class="dlc-break-countdown" id="dlc-break-countdown">${_formatTime(remaining)}</div>
-            <div class="dlc-break-players">
-                <div class="dlc-break-players-label">Players</div>
-                <div class="dlc-break-player-list" id="dlc-break-player-list">
-                    ${playerListHTML}
-                </div>
-            </div>
-            <div class="dlc-break-actions">
-                <button id="dlc-break-back-btn" class="dlc-break-back-btn">I'm Back!</button>
-                ${isGM ? '<button id="dlc-break-end-btn" class="dlc-break-end-btn">End Break</button>' : ''}
-            </div>
-        </div>
-    `;
-}
 
 function _formatTime(seconds) {
     const h = Math.floor(seconds / 3600);

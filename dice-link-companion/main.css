@@ -1950,35 +1950,13 @@
    BREAK OVERLAY
    ============================================================================ */
 
-#dlc-break-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.82);
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: inherit;
-}
-
 .dlc-break-panel {
-  background: var(--dlc-bg-section);
-  border: 3px solid var(--dlc-border);
-  border-radius: 12px;
-  padding: 40px 48px;
-  min-width: 380px;
-  max-width: 520px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.7);
-}
-
-.dlc-break-title {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--dlc-text-primary);
+  gap: 20px;
+  padding: 16px;
+  width: 100%;
 }
 
 .dlc-break-countdown {
@@ -2043,16 +2021,16 @@
   color: var(--dlc-text-primary);
 }
 
-.dlc-break-actions {
+.dlc-break-status-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
 }
 
 .dlc-break-back-btn {
   flex: 1;
-  padding: 16px 0;
-  font-size: 18px;
+  padding: 14px 0;
+  font-size: 16px;
   font-weight: 700;
   background: rgba(245, 158, 11, 0.12);
   color: #f59e0b;
@@ -2068,14 +2046,38 @@
 }
 
 .dlc-break-back-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dlc-break-away-btn {
+  flex: 1;
+  padding: 14px 0;
+  font-size: 16px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--dlc-text-muted);
+  border: 2px solid var(--dlc-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dlc-break-away-btn:hover:not(:disabled) {
+  border-color: var(--dlc-accent);
+  color: var(--dlc-accent);
+}
+
+.dlc-break-away-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .dlc-break-end-btn {
-  flex: 1;
-  padding: 16px 0;
-  font-size: 18px;
+  width: 100%;
+  padding: 12px 0;
+  font-size: 16px;
   font-weight: 600;
   background: transparent;
   color: var(--dlc-text-muted);

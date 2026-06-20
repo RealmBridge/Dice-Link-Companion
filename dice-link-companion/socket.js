@@ -19,7 +19,7 @@ import { refreshPanel } from "./dice-panel.js";
 import { applyManualDice, applyDigitalDice } from "./mode-application.js";
 import { setHasRequestedThisSession } from "./state-management.js";
 import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
-import { showBreakOverlay, markPlayerBack, endBreak } from "./break-manager.js";
+import { showBreakOverlay, markPlayerBack, markPlayerAway, endBreak } from "./break-manager.js";
 
 // ============================================================================
 // SOCKET LISTENERS
@@ -113,6 +113,10 @@ export function setupSocketListeners() {
 
     if (data.action === "breakPlayerBack") {
       markPlayerBack(data.userId);
+    }
+
+    if (data.action === "breakPlayerAway") {
+      markPlayerAway(data.userId);
     }
 
     if (data.action === "breakEnd") {
