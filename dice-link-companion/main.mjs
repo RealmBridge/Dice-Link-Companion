@@ -131,6 +131,8 @@ import {
   getStreamCanvasWebP
 } from "./video-feed.js";
 
+import { handleStartBreak } from "./break-manager.js";
+
 // Message sending wrappers for QWebChannel
 function sendRollRequest(data) {
   sendMessage_Common({
@@ -580,7 +582,7 @@ Hooks.once("ready", async () => {
     // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
     setStartBreakCallback((data) => {
       debug("startBreak received from DLA", data);
-      // TODO: implement Foundry-side break (pause, overlay, player checklist)
+      handleStartBreak(data);
     });
 
     setCameraFrameCallback((frameB64) => {

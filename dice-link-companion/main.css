@@ -1946,6 +1946,151 @@
   flex-shrink: 1 !important;
 }
 
+/* ============================================================================
+   BREAK OVERLAY
+   ============================================================================ */
+
+#dlc-break-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+
+.dlc-break-panel {
+  background: var(--dlc-bg-section);
+  border: 3px solid var(--dlc-border);
+  border-radius: 12px;
+  padding: 40px 48px;
+  min-width: 380px;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.7);
+}
+
+.dlc-break-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--dlc-text-primary);
+}
+
+.dlc-break-countdown {
+  font-size: 72px;
+  font-weight: 800;
+  color: var(--dlc-text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.dlc-break-players {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dlc-break-players-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--dlc-text-muted);
+}
+
+.dlc-break-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dlc-break-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--dlc-bg-input);
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.dlc-break-player.is-back {
+  border-color: var(--dlc-success);
+}
+
+.dlc-break-player-indicator {
+  font-size: 16px;
+  width: 22px;
+  text-align: center;
+  color: var(--dlc-text-muted);
+  flex-shrink: 0;
+}
+
+.dlc-break-player.is-back .dlc-break-player-indicator {
+  color: var(--dlc-success);
+}
+
+.dlc-break-player-name {
+  font-size: 16px;
+  color: var(--dlc-text-primary);
+}
+
+.dlc-break-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.dlc-break-back-btn {
+  flex: 1;
+  padding: 16px 0;
+  font-size: 18px;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 2px solid #f59e0b;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.dlc-break-back-btn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.dlc-break-back-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dlc-break-end-btn {
+  flex: 1;
+  padding: 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--dlc-text-muted);
+  border: 2px solid var(--dlc-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.dlc-break-end-btn:hover {
+  border-color: var(--dlc-danger);
+  color: var(--dlc-danger);
+}
+
 /* Form and all child containers - natural width with max-width constraint */
 .dlc-cloned-system-dialog form,
 .dlc-cloned-system-dialog .window-content,
