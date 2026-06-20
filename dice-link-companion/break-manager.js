@@ -24,7 +24,7 @@ class BreakOverlayApp extends ApplicationV2 {
         id: "dlc-break-overlay",
         classes: ["dlc-break-app"],
         window: {
-            title: "☕ Break Time!",
+            title: "Session is on a break",
             resizable: false,
             minimizable: false,
         },
@@ -125,7 +125,6 @@ class BreakOverlayApp extends ApplicationV2 {
         return this.#players.map(p => {
             const isBack = this.#playerBackStatus[p.id] === true;
             return `<div class="dlc-break-player ${isBack ? 'is-back' : ''}">
-                <span class="dlc-break-player-indicator">${isBack ? '✓' : '…'}</span>
                 <span class="dlc-break-player-name">${p.name}</span>
             </div>`;
         }).join('');
