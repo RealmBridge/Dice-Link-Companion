@@ -2,7 +2,7 @@
   "id": "dice-link-companion",
   "title": "Dice Link Companion",
   "description": "When activated, overrides dice configuration to manual input. When deactivated, returns to digital roll.",
-  "version": "1.0.9.162",
+  "version": "1.0.9.163",
   "compatibility": {
     "minimum": "13",
     "verified": "14",
@@ -14,9 +14,9 @@
       "url": "https://github.com/Realm-Bridge"
     }
   ],
-  "url": "https://github.com/Realm-Bridge/v0-dice-link-companion",
-  "manifest": "https://raw.githubusercontent.com/Realm-Bridge/v0-dice-link-companion/main/dice-link-companion/module.json",
-  "download": "https://github.com/Realm-Bridge/v0-dice-link-companion/archive/refs/heads/main.zip",
+  "url": "https://github.com/RealmBridge/Dice-Link-Companion",
+  "manifest": "https://raw.githubusercontent.com/RealmBridge/Dice-Link-Companion/main/dice-link-companion/module.json",
+  "download": "https://github.com/RealmBridge/Dice-Link-Companion/archive/refs/heads/main.zip",
   "esmodules": [
     "main.mjs"
   ],
