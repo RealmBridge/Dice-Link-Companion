@@ -18,7 +18,6 @@ let connectionChangeCallbacks = [];
 let buttonSelectCallback = null;
 let diceResultCallback = null;
 let cancelCallback = null;
-let rollResultCallback = null;
 let diceTrayRollCallback = null;
 let playerModeActionCallback = null;
 let cameraFrameCallback = null;
@@ -145,14 +144,6 @@ function setupDLAInterface(dlaIface) {
     debugQWebChannel("Setting up signal handlers", {});
 
     // Connect signal handlers for all message types
-
-    // Roll results
-    if (dlaInterface.rollResultReady) {
-      dlaInterface.rollResultReady.connect((result) => {
-        debugQWebChannel("Received rollResult signal", {});
-        if (rollResultCallback) rollResultCallback(JSON.parse(result));
-      });
-    }
 
     // Roll cancelled - callback expects: (rollId)
     if (dlaInterface.rollCancelledReady) {
@@ -401,10 +392,6 @@ export function setDiceResultCallback(callback) {
 
 export function setCancelCallback(callback) {
   cancelCallback = callback;
-}
-
-export function setRollResultCallback(callback) {
-  rollResultCallback = callback;
 }
 
 export function setDiceTrayRollCallback(callback) {
