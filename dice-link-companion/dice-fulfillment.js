@@ -87,7 +87,9 @@ export async function submitMirroredDialog(userChoice) {
   
   // Normalize html to a DOM element
   let element;
-  if (html?.element) {
+  if (html instanceof jQuery) {
+    element = html[0];
+  } else if (html?.element) {
     element = html.element;
   } else if (html?.nodeType === 1) {
     element = html;

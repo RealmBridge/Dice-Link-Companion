@@ -18,6 +18,7 @@ let connectionChangeCallbacks = [];
 let buttonSelectCallback = null;
 let diceResultCallback = null;
 let cancelCallback = null;
+let rollResultCallback = null;
 let diceTrayRollCallback = null;
 let playerModeActionCallback = null;
 let cameraFrameCallback = null;
@@ -144,6 +145,14 @@ function setupDLAInterface(dlaIface) {
     debugQWebChannel("Setting up signal handlers", {});
 
     // Connect signal handlers for all message types
+
+    // Roll results
+    if (dlaInterface.rollResultReady) {
+      dlaInterface.rollResultReady.connect((result) => {
+        debugQWebChannel("Received rollResult signal", {});
+        if (rollResultCallback) rollResultCallback(JSON.parse(result));
+      });
+    }
 
     // Roll cancelled - callback expects: (rollId)
     if (dlaInterface.rollCancelledReady) {
@@ -363,7 +372,7 @@ export function sendMessage(data) {
     } else if (data.type === "playerModesUpdate" && dlaInterface.receivePlayerModesUpdate) {
       debugQWebChannel("Calling receivePlayerModesUpdate...", {});
       dlaInterface.receivePlayerModesUpdate(jsonData);
-    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
+    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatDiagnostic" || data.type === "chatRefStyles" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
       dlaInterface.receiveChatMessage(jsonData);
     } else {
       debugError("Unknown message type or handler not available", {
@@ -392,6 +401,10 @@ export function setDiceResultCallback(callback) {
 
 export function setCancelCallback(callback) {
   cancelCallback = callback;
+}
+
+export function setRollResultCallback(callback) {
+  rollResultCallback = callback;
 }
 
 export function setDiceTrayRollCallback(callback) {
