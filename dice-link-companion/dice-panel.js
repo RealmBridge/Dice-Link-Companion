@@ -130,7 +130,7 @@ export function openPanel(DiceLinkCompanionApp) {
   // If panel already exists and is rendered, just bring it to front - don't recreate
   if (panelDialog && panelDialog.rendered) {
     debug("Panel exists and rendered, bringing to top");
-    panelDialog.bringToTop();
+    panelDialog.bringToFront();
     return;
   }
   
