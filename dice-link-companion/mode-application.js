@@ -12,7 +12,7 @@ import { applyDiceLinkFulfillment, removeDiceLinkFulfillment } from "./dice-fulf
  * When DLA is connected, DLA fills values; when not, readOnly is stripped in
  * dialog-mirroring.js so the user can type directly.
  */
-function applyManualDice() {
+async function applyManualDice() {
   applyDiceLinkFulfillment();
 }
 
@@ -20,7 +20,7 @@ function applyManualDice() {
  * Apply digital dice mode.
  * Always restores whatever fulfillment method was active before DLC wrote to it.
  */
-function applyDigitalDice() {
+async function applyDigitalDice() {
   removeDiceLinkFulfillment();
 }
 

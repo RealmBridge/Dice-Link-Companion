@@ -25,9 +25,9 @@ import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPending
  */
 export function setupDialogMirroring() {
   // Try specific dnd5e roll configuration dialog hooks
-  Hooks.on("renderRollConfigurationDialog", (app, html, context) => {
+  Hooks.on("renderRollConfigurationDialog", (app, html, data) => {
     debug("[DLC-HOOK] renderRollConfigurationDialog fired", { appName: app?.constructor?.name, appId: app?.id });
-    handleDialogRender(app, html, context);
+    handleDialogRender(app, html, data);
   });
 
   // Hook to detect when applications close (v14 uses closeApplicationV2)
@@ -46,9 +46,9 @@ export function setupDialogMirroring() {
   });
 
   // Generic hook for any application render - cast wide net
-  Hooks.on("renderApplicationV2", (app, html, context) => {
+  Hooks.on("renderApplicationV2", (app, html, data) => {
     debug("[DLC-HOOK] renderApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id, htmlType: html?.constructor?.name });
-    handleDialogRender(app, html, context);
+    handleDialogRender(app, html, data);
   });
 }
 
@@ -75,7 +75,7 @@ function isUserInManualMode() {
  * Handle dialog render - check if it's a roll dialog and mirror it
  */
 function handleDialogRender(app, html, data) {
-  const htmlEl = html;
+  const htmlEl = html instanceof jQuery ? html[0] : html;
   debug("[DLC-HTML-DIAG] app=" + (app?.constructor?.name ?? "null") +
     " nodeType=" + (htmlEl?.nodeType ?? "null") +
     " htmlType=" + (htmlEl?.constructor?.name ?? "null") +
@@ -94,7 +94,7 @@ function handleDialogRender(app, html, data) {
       const isResolver = title.includes("roll resolution") || title.includes("resolver") ||
         app.constructor?.name?.toLowerCase().includes("rollresolver");
       if (isResolver) {
-        const element = html?.element || html;
+        const element = html instanceof jQuery ? html[0] : (html?.element || html);
         if (element) {
           element.querySelectorAll('input[type="number"]').forEach(input => {
             input.readOnly = false;
@@ -114,7 +114,7 @@ function handleDialogRender(app, html, data) {
     const title = (app.title || "").toLowerCase();
     
     // Hide the native dialog element
-    const htmlElement = html;
+    const htmlElement = html instanceof jQuery ? html[0] : html;
     const elementToHide = htmlElement?.style ? htmlElement : html?.element;
     
     // Roll Resolution dialogs - mirror these too using the same pattern
@@ -228,7 +228,13 @@ function mirrorDialogToPanel(app, html, data) {
     
     // Clone the system dialog's HTML element to preserve exact layout and styling
     let elementToClone;
-    if (html?.nodeType === 1) {
+    if (html instanceof jQuery) {
+      elementToClone = html[0];
+      debugCloning("HTML is jQuery", { length: html.length });
+    } else if (html?.element) {
+      elementToClone = html.element;
+      debugCloning("HTML has .element property", { tagName: html.element?.tagName });
+    } else if (html?.nodeType === 1) {
       elementToClone = html;
       debugCloning("HTML is Element (nodeType=1)", { tagName: html.tagName });
     }
@@ -457,7 +463,9 @@ function mirrorRollResolverToPanel(app, html, data) {
   try {
     // Normalize html to a DOM element
     let element;
-    if (html?.element) {
+    if (html instanceof jQuery) {
+      element = html[0];
+    } else if (html?.element) {
       element = html.element;
     } else if (html?.nodeType === 1) {
       element = html;
@@ -672,12 +680,14 @@ export async function cancelFoundryResolver() {
 function extractDialogFormData(app, html) {
   // Normalize html to a DOM element
   let element;
-  if (html?.element) {
+  if (html instanceof jQuery) {
+    element = html[0];
+  } else if (html?.element) {
     element = html.element;
   } else if (html?.nodeType === 1) {
     element = html;
   } else {
-    element = app?.element?.[0] || app?.element;
+    element = app?.element?.[0] || app?.element || document.querySelector(`[data-appid="${app?.appId}"]`);
   }
   
   if (!element) {

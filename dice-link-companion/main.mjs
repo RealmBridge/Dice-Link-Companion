@@ -1,5 +1,5 @@
 /**
- * Dice Link Companion - Foundry VTT v14
+ * Dice Link Companion - Foundry VTT v13
  * A player-GM dice mode management system with dialog mirroring.
  * Branded for Realm Bridge - https://realmbridge.co.uk
  */
@@ -25,17 +25,24 @@ import {
   setCollapsedSections
 } from "./settings.js";
 
-import {
+import { 
   getPendingRollRequest,
   getHasRequestedThisSession,
   getCurrentPanelDialog,
+  getPendingDiceEntry,
+  getDiceEntryCancelled,
   getMirroredDialog,
   getDLAPhase,
   setPendingRollRequest,
   setHasRequestedThisSession,
   setCurrentPanelDialog,
+  setPendingDiceEntry,
+  setDiceEntryCancelled,
   setMirroredDialog,
   setDLAPhase,
+  clearAllState,
+  resetUIState,
+  hasPendingOperations,
   onMirroredDialogChange
 } from "./state-management.js";
 
@@ -405,6 +412,7 @@ Hooks.once("ready", async () => {
       setMirroredDialog(null);
       setPendingRollRequest(null);
 
+      setDiceEntryCancelled(true);
       setDLAPhase(null);
       refreshPanel();
     });
