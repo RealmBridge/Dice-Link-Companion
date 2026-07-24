@@ -1,5 +1,5 @@
 /**
- * Dice Link Companion - Foundry VTT v13
+ * Dice Link Companion - Foundry VTT v14
  * A player-GM dice mode management system with dialog mirroring.
  * Branded for Realm Bridge - https://realmbridge.co.uk
  */
