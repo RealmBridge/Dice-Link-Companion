@@ -363,7 +363,7 @@ export function sendMessage(data) {
     } else if (data.type === "playerModesUpdate" && dlaInterface.receivePlayerModesUpdate) {
       debugQWebChannel("Calling receivePlayerModesUpdate...", {});
       dlaInterface.receivePlayerModesUpdate(jsonData);
-    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatDiagnostic" || data.type === "chatRefStyles" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
+    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
       dlaInterface.receiveChatMessage(jsonData);
     } else {
       debugError("Unknown message type or handler not available", {
