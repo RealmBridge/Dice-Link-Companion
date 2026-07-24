@@ -8,7 +8,6 @@
 import {
   REALM_BRIDGE_URL,
   LOGO_URL,
-  LOGO_SQUARE_URL,
   ROLE_NAMES
 } from "./constants.js";
 
