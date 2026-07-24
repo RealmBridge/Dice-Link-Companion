@@ -15,8 +15,6 @@ import { debugError } from "./debug.js";
 let pendingRollRequest = null;
 let hasRequestedThisSession = false;
 let currentPanelDialog = null;
-let pendingDiceEntry = null;
-let diceEntryCancelled = false;
 let mirroredDialog = null;
 
 // DLA communication phase tracking
@@ -53,22 +51,6 @@ export function getHasRequestedThisSession() {
  */
 export function getCurrentPanelDialog() {
   return currentPanelDialog;
-}
-
-/**
- * Get pending dice entry
- * @returns {Object|null} The pending dice entry or null
- */
-export function getPendingDiceEntry() {
-  return pendingDiceEntry;
-}
-
-/**
- * Get dice entry cancelled state
- * @returns {boolean} Whether dice entry was cancelled
- */
-export function getDiceEntryCancelled() {
-  return diceEntryCancelled;
 }
 
 /**
@@ -116,22 +98,6 @@ export function setCurrentPanelDialog(value) {
 }
 
 /**
- * Set pending dice entry
- * @param {Object|null} value - The dice entry to set
- */
-export function setPendingDiceEntry(value) {
-  pendingDiceEntry = value;
-}
-
-/**
- * Set dice entry cancelled state
- * @param {boolean} value - Whether dice entry was cancelled
- */
-export function setDiceEntryCancelled(value) {
-  diceEntryCancelled = value;
-}
-
-/**
  * Set the mirrored dialog reference
  * Notifies all registered listeners when value changes
  * @param {Object|null} value - The mirrored dialog to set
@@ -157,38 +123,6 @@ export function setDLAPhase(phase) {
 }
 
 
-
-/**
- * Clear all application state
- * Used when session ends or panel closes
- */
-export function clearAllState() {
-  pendingRollRequest = null;
-  hasRequestedThisSession = false;
-  currentPanelDialog = null;
-  pendingDiceEntry = null;
-  diceEntryCancelled = false;
-  mirroredDialog = null;
-  dlaPhase = null;
-}
-
-/**
- * Reset only UI state (keep session state)
- * Used when panel refreshes
- */
-export function resetUIState() {
-  currentPanelDialog = null;
-  pendingDiceEntry = null;
-  diceEntryCancelled = false;
-}
-
-/**
- * Check if any pending operations exist
- * @returns {boolean} True if there are pending operations
- */
-export function hasPendingOperations() {
-  return pendingRollRequest !== null || pendingDiceEntry !== null;
-}
 
 // ============================================================================
 // STATE LISTENERS
