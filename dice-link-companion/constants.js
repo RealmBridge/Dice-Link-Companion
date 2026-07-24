@@ -15,16 +15,10 @@ export const MODULE_ID = "dice-link-companion";
 // Branding
 export const REALM_BRIDGE_URL = "https://realmbridge.co.uk";
 export const LOGO_URL = "modules/dice-link-companion/assets/logo-header.png";
-export const LOGO_SQUARE_URL = "modules/dice-link-companion/assets/logo-square.png";
 
 // Timing constants (in milliseconds)
 export const ASYNC_OPERATION_DELAY_MS = 40;
 
-// Dice Link App connection
-// Use explicit 127.0.0.1 (IPv4 loopback) instead of localhost to avoid IPv4/IPv6 mismatch
-// Each player connects to their own local DLA instance on explicit IPv4
-export const DICE_LINK_APP_HOST = "127.0.0.1";
-export const DICE_LINK_APP_PORT = 8765;
 // Dice configuration
 export const DICE_TYPES = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
 
@@ -46,25 +40,10 @@ export const SETTING_DEFAULTS = {
   globalOverride: GLOBAL_OVERRIDE_MODES.INDIVIDUAL,
   playerMode: PLAYER_MODES.DIGITAL,
   collapsedSections: {
-    rollRequest: false,
-    globalOverride: true,
     playerModes: true,
-    permissions: true,
-    videoFeed: true,
     pending: false,
     topRow: false
-  },
-  permissions: {
-    playerCanRequestManual: true,
-    playerCanSwitchToDigital: true
   }
-};
-
-// UI dimensions (for future use)
-export const UI_DIMENSIONS = {
-  PANEL_WIDTH: 400,
-  PANEL_HEIGHT_MIN: 200,
-  PANEL_HEIGHT_MAX: 800
 };
 
 // Role names mapping (from Foundry)
