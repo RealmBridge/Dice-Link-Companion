@@ -36,6 +36,11 @@ export function showDiceStreamFrame(frameB64) {
           streamCanvas.width = img.naturalWidth;
           streamCanvas.height = img.naturalHeight;
         }
+        // Clear first. The dice-clip frames are now mostly transparent (a soft circle
+        // around each die), and drawImage composites onto whatever is already on the
+        // canvas. Without clearing, the see-through areas let previous frames show
+        // through and leave ghost circles from earlier die positions.
+        streamCtx.clearRect(0, 0, streamCanvas.width, streamCanvas.height);
         streamCtx.drawImage(img, 0, 0);
       };
       img.onerror = (e) => debugError('[Camera] WebP frame decode error:', e);
