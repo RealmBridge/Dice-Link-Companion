@@ -128,7 +128,8 @@ import {
 import {
   showDiceStreamFrame,
   endDiceStream,
-  getStreamCanvasWebP
+  encodeSelfStreamWebP,
+  freeDiceStreamSlot
 } from "./video-feed.js";
 
 import { handleStartBreak } from "./break-manager.js";
@@ -586,15 +587,25 @@ Hooks.once("ready", async () => {
     });
 
     setCameraFrameCallback((frameB64) => {
-      showDiceStreamFrame(frameB64);
-      const networkFrame = getStreamCanvasWebP();
-      if (networkFrame) {
-        game.socket.emit(`module.${MODULE_ID}`, { action: "cameraFrame", frameB64: networkFrame });
-      }
+      const uid = game.user.id;
+      // Draw our own clip locally in our spot, then encode for broadcast OFF the main
+      // thread (async toBlob) so the roll result isn't held up behind the WebP encode.
+      showDiceStreamFrame(frameB64, uid);
+      encodeSelfStreamWebP((networkFrame) => {
+        if (networkFrame) {
+          game.socket.emit(`module.${MODULE_ID}`, { action: "cameraFrame", frameB64: networkFrame, userId: uid });
+        }
+      });
     });
     setCameraStreamEndCallback(() => {
-      endDiceStream();
-      game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd" });
+      const uid = game.user.id;
+      endDiceStream(uid);
+      game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd", userId: uid });
+    });
+
+    // Free a player's clip spot when they disconnect, so a reconnect fills the lowest gap.
+    Hooks.on("userConnected", (user, connected) => {
+      if (!connected) freeDiceStreamSlot(user.id);
     });
 
     ensureDSNEnabled();

@@ -100,11 +100,11 @@ export function setupSocketListeners() {
     }
 
     if (data.action === "cameraFrame") {
-      showDiceStreamFrame(data.frameB64);
+      showDiceStreamFrame(data.frameB64, data.userId);
     }
 
     if (data.action === "cameraStreamEnd") {
-      endDiceStream();
+      endDiceStream(data.userId);
     }
 
     if (data.action === "breakStart") {
