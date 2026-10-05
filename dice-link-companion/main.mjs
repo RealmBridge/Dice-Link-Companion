@@ -586,19 +586,27 @@ Hooks.once("ready", async () => {
       handleStartBreak(data);
     });
 
+    // Guards a race from the off-thread (async) broadcast encode: the last frame or
+    // two can still be encoding when the stream ends, so without this flag they would
+    // be emitted AFTER cameraStreamEnd and re-show the tray on other players with no
+    // further stop to clear it. Setting it on stream-end makes any in-flight straggler
+    // frame drop its broadcast, so cameraStreamEnd is always the last message sent.
+    let localBroadcastEnded = false;
     setCameraFrameCallback((frameB64) => {
       const uid = game.user.id;
+      localBroadcastEnded = false;
       // Draw our own clip locally in our spot, then encode for broadcast OFF the main
       // thread (async toBlob) so the roll result isn't held up behind the WebP encode.
       showDiceStreamFrame(frameB64, uid);
       encodeSelfStreamWebP((networkFrame) => {
-        if (networkFrame) {
+        if (networkFrame && !localBroadcastEnded) {
           game.socket.emit(`module.${MODULE_ID}`, { action: "cameraFrame", frameB64: networkFrame, userId: uid });
         }
       });
     });
     setCameraStreamEndCallback(() => {
       const uid = game.user.id;
+      localBroadcastEnded = true;
       endDiceStream(uid);
       game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd", userId: uid });
     });
