@@ -133,6 +133,38 @@ import {
 } from "./video-feed.js";
 
 import { handleStartBreak } from "./break-manager.js";
+import { normaliseVisibility, clipGoesToOthers } from "./clip-visibility.js";
+
+// ---- Who may see this player's dice clip (clip-visibility.js has the rules) ----
+// The roll's own dialog may pick a "Roll Mode" for that one roll; by the time the clip
+// starts, Foundry has replaced that dialog with the dice resolver, so it is noted when
+// the DLA button is pressed. Rolls without one use the chat visibility setting (the
+// one DLA's Public / Whisper / Self only / GM only buttons set).
+let rollClipVisibility = null;   // this roll's visibility from its dialog, if it had one
+let clipActive = false;          // a clip is being sent right now
+let clipVisibility = null;       // locked when each clip starts
+let clipToOthers = true;         // whether this clip goes to the other players at all
+
+/** The "Roll Mode" picked in a mirrored roll dialog, or null if it has none. */
+function readDialogVisibility(dialogRef) {
+  try {
+    if (!dialogRef?.html) return null;
+    const html = dialogRef.html instanceof jQuery ? dialogRef.html : $(dialogRef.html);
+    const select = html.find('select[name$="rollMode"], select[name$="messageMode"]').first();
+    return select.length ? normaliseVisibility(select.val()) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Foundry's current chat visibility (core messageMode), or null if unknown. */
+function currentChatVisibility() {
+  try {
+    return normaliseVisibility(game.settings.get("core", "messageMode"));
+  } catch (e) {
+    return null;
+  }
+}
 
 // Message sending wrappers for QWebChannel
 function sendRollRequest(data) {
@@ -395,6 +427,7 @@ Hooks.once("ready", async () => {
     // Close hidden Foundry dialog and clear all state
     // ========================================================================
     setCancelCallback((rollId) => {
+      rollClipVisibility = null;
       debug("Roll cancelled by DLA user", { rollId });
       
       const dialogRef = getMirroredDialog();
@@ -437,6 +470,10 @@ Hooks.once("ready", async () => {
         }
       }
       
+      // Note this roll's visibility for its dice clip (the dialog is gone by then)
+      rollClipVisibility = readDialogVisibility(dialogRef);
+      clipActive = false;
+
       // Store the rollId for Phase B correlation
       const pendingRoll = getPendingRollRequest();
       if (pendingRoll) {
@@ -459,6 +496,7 @@ Hooks.once("ready", async () => {
     // ========================================================================
     setDiceResultCallback((rollId, results) => {
       debug("Phase B: Dice results from DLA", JSON.stringify({ rollId, resultCount: results.length, results }));
+      rollClipVisibility = null;
 
       // Use the stored resolver reference rather than a DOM search, which could find stale resolvers
       const resolver = getMirroredDialog()?.element;
@@ -594,21 +632,34 @@ Hooks.once("ready", async () => {
     let localBroadcastEnded = false;
     setCameraFrameCallback((frameB64) => {
       const uid = game.user.id;
+      if (!clipActive) {
+        // First frame of a new clip: lock who may see it for the whole clip.
+        clipActive = true;
+        clipVisibility = rollClipVisibility || currentChatVisibility();
+        clipToOthers = clipGoesToOthers(clipVisibility, game.user.isGM);
+        debug("Dice clip visibility", { visibility: clipVisibility || "public", rollerIsGM: game.user.isGM, sentToOthers: clipToOthers });
+      }
       localBroadcastEnded = false;
       // Draw our own clip locally in our spot, then encode for broadcast OFF the main
       // thread (async toBlob) so the roll result isn't held up behind the WebP encode.
       showDiceStreamFrame(frameB64, uid);
+      if (!clipToOthers) return;   // Self only, or a DM's private roll: nobody else sees it
       encodeSelfStreamWebP((networkFrame) => {
         if (networkFrame && !localBroadcastEnded) {
-          game.socket.emit(`module.${MODULE_ID}`, { action: "cameraFrame", frameB64: networkFrame, userId: uid });
+          game.socket.emit(`module.${MODULE_ID}`, {
+            action: "cameraFrame", frameB64: networkFrame, userId: uid,
+            visibility: clipVisibility, rollerIsGM: game.user.isGM
+          });
         }
       });
     });
     setCameraStreamEndCallback(() => {
       const uid = game.user.id;
       localBroadcastEnded = true;
+      const wasSent = clipToOthers;
+      clipActive = false;
       endDiceStream(uid);
-      game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd", userId: uid });
+      if (wasSent) game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd", userId: uid });
     });
 
     // Free a player's clip spot when they disconnect, so a reconnect fills the lowest gap.

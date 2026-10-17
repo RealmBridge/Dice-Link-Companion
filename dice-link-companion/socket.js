@@ -19,6 +19,7 @@ import { refreshPanel } from "./dice-panel.js";
 import { applyManualDice, applyDigitalDice } from "./mode-application.js";
 import { setHasRequestedThisSession } from "./state-management.js";
 import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
+import { clipShownToMe } from "./clip-visibility.js";
 import { showBreakOverlay, markPlayerBack, markPlayerAway, endBreak } from "./break-manager.js";
 
 // ============================================================================
@@ -100,7 +101,10 @@ export function setupSocketListeners() {
     }
 
     if (data.action === "cameraFrame") {
-      showDiceStreamFrame(data.frameB64, data.userId);
+      // Private rolls: only the people allowed to see this clip draw it (clip-visibility.js).
+      if (clipShownToMe(data.visibility, data.rollerIsGM, game.user.isGM)) {
+        showDiceStreamFrame(data.frameB64, data.userId);
+      }
     }
 
     if (data.action === "cameraStreamEnd") {
