@@ -10,8 +10,9 @@ import {
 } from "./constants.js";
 
 import { 
-  registerCoreSettings, 
+  registerCoreSettings,
   registerPlayerModeSettings,
+  registerPlayerModeSetting,
   getSetting,
   setSetting,
   getPlayerMode,
@@ -328,6 +329,9 @@ Hooks.once("ready", async () => {
   try {
     // Register per-user settings FIRST - wait for completion
     registerPlayerModeSettings();
+    // ...and for any player added later in the session (e.g. joining through a Forge
+    // invite), so the GM can approve them without reloading.
+    Hooks.on("createUser", (user) => registerPlayerModeSetting(user.id));
     
     // Give settings time to register before hooks fire
     await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));

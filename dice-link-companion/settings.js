@@ -43,20 +43,29 @@ export function registerCoreSettings() {
  */
 export function registerPlayerModeSettings() {
   for (const user of game.users) {
-    const key = `playerMode_${user.id}`;
-    const fullKey = `${MODULE_ID}.${key}`;
-    if (!game.settings.settings.has(fullKey)) {
-      try {
-        game.settings.register(MODULE_ID, key, {
-          scope: "world",
-          config: false,
-          type: String,
-          default: SETTING_DEFAULTS.playerMode
-        });
-      } catch (e) {
-        debugError("Failed to register setting:", fullKey, e);
-      }
-    }
+    registerPlayerModeSetting(user.id);
+  }
+}
+
+/**
+ * Register one player's mode setting, if it isn't already. Also used for a player added
+ * after this browser loaded the game (e.g. joining through a Forge invite) - "ready" only
+ * registered the players that existed then, so the GM couldn't approve them until a reload.
+ * @param {string} userId - The user ID
+ */
+export function registerPlayerModeSetting(userId) {
+  const key = `playerMode_${userId}`;
+  const fullKey = `${MODULE_ID}.${key}`;
+  if (game.settings.settings.has(fullKey)) return;
+  try {
+    game.settings.register(MODULE_ID, key, {
+      scope: "world",
+      config: false,
+      type: String,
+      default: SETTING_DEFAULTS.playerMode
+    });
+  } catch (e) {
+    debugError("Failed to register setting:", fullKey, e);
   }
 }
 
@@ -103,6 +112,7 @@ export function getPlayerMode(userId = game.user.id) {
  * @param {string} mode - "manual" or "digital"
  */
 export async function setPlayerMode(userId, mode) {
+  registerPlayerModeSetting(userId);   // a player added since this browser loaded the game
   return setSetting(`playerMode_${userId}`, mode);
 }
 
