@@ -23,33 +23,38 @@ function logger(label, method = "log") {
 export const debug = logger("[Dice Link Debug]");
 export const debugError = logger("[Dice Link Debug]", "error");
 export const debugResolverState = logger("[Dice Link Resolver State]");  // Foundry's dice resolver
-export const debugFulfillment = logger("[Dice Link Fulfillment]");       // dice tray rolls
 export const debugRollWindow = logger("[Dice Link Roll Window]");        // roll windows passed to DLA
 export const debugQWebChannel = logger("[Dice Link QWebChannel]");       // the link to DLA
 export const debugCamera = logger("[Dice Link Camera]");                 // dice clips
 export const debugChatLog = logger("[Dice Link Chat Log]");              // the chat copy in DLA
 
 /**
- * A roll window's buttons, summarised for the log (label, action, tag, type)
- * @param {Array} buttons - the buttons read from the window (dialog-mirroring.js)
+ * A page element - a roll window, a button, an input - or a list of them, summarised for
+ * the log: its tag, id, class, type, name, value, text, action, limits, whether it shows,
+ * and whether it is still on the page (empty fields left out). Every DLC script describes
+ * elements for the log with this. It never throws, so a log line can't stop a roll.
+ * @param {Element|Element[]|NodeList|null} what
  * @returns {string} JSON
  */
-export function describeButtons(buttons) {
-  return JSON.stringify((buttons || []).map(b => ({
-    label: b.label,
-    action: b.action,
-    tagName: b.element?.tagName,
-    type: b.element?.type
-  })));
-}
-
-/**
- * Log state of a variable with label
- * @param {string} label - Description of what's being logged
- * @param {any} value - Value to log
- */
-export function debugState(label, value) {
-  debug(label + ":", value);
+export function describe(what) {
+  const one = (el) => {
+    if (el?.nodeType !== 1) return el ?? null;
+    const fields = {
+      tag: el.tagName, id: el.id, class: el.className, type: el.type, name: el.name,
+      value: el.value, checked: el.checked, max: el.max, placeholder: el.placeholder,
+      die: el.dataset?.die, action: el.dataset?.action, text: el.textContent?.trim().slice(0, 60),
+      options: el.tagName === "SELECT" ? el.options.length : undefined,
+      display: getComputedStyle(el).display, visibility: el.style.visibility,
+      open: el.open, inPage: el.isConnected
+    };
+    return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+  };
+  try {
+    const isList = what && typeof what === "object" && what.nodeType !== 1 && typeof what.length === "number";
+    return JSON.stringify(isList ? Array.from(what, one) : one(what));
+  } catch (e) {
+    return `(could not describe: ${e.message})`;
+  }
 }
 
 /**

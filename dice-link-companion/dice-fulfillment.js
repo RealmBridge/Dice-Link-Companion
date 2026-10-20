@@ -1,139 +1,144 @@
 /**
- * dice-fulfillment.js - how Foundry gets its dice values while a user is in manual mode.
- * Registers "Dice Link Companion" as a Foundry dice fulfillment method and switches it on
- * or off for every die; stops Dice So Nice animating manual rolls; presses the chosen
- * button on a hidden roll window; and runs rolls sent from DLA's dice tray.
- * Hiding Foundry's roll windows is done by dialog-mirroring.js.
+ * dice-fulfillment.js - DLA's side of each roll, carried out in Foundry: presses the button
+ * chosen in DLA on the hidden roll window, fills in the dice values DLA sends, cancels a
+ * roll cancelled in DLA, and runs rolls from DLA's dice tray. Hiding Foundry's roll windows,
+ * and telling DLA about them, is done by dialog-mirroring.js; switching a user's dice to
+ * manual or digital is done by mode-application.js.
  */
 
 import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
-import { debug, debugResolverState, debugFulfillment, debugError, describeButtons } from "./debug.js";
-import { getMirroredDialog } from "./state-management.js";
+import { debug, debugError, describe, patchResolverForDiagnostics } from "./debug.js";
+import { getMirroredDialog, getPendingRollRequest, setDLAPhase, clearRollState } from "./state-management.js";
 import { windowElement } from "./dialog-mirroring.js";
+import { onDLAMessage } from "./qwebchannel-client.js";
+import { normaliseVisibility } from "./clip-visibility.js";
+import { setRollClipVisibility, clearRollClipVisibility } from "./video-feed.js";
+import { refreshPanel } from "./dice-panel.js";
 
 // ============================================================================
-// DICE FULFILLMENT SETUP
+// SETUP
 // ============================================================================
 
 /**
- * Setup Dice Link as a fulfillment method.
- * We DON'T register a custom resolver - instead we let Foundry use its native
- * RollResolver, and our dialog-mirroring.js hooks hide it and ask DLA for the dice.
- * This is the same hide-and-pass-on pattern used for roll dialogs.
+ * Register for DLA's side of each roll. Called from main.mjs setup.
  */
 export function setupDiceFulfillment() {
-  debugResolverState("setup_fulfillment_starting", {});
+  onDLAMessage("buttonSelect", onButtonSelect);
+  onDLAMessage("diceResult", onDiceResult);
+  onDLAMessage("rollCancelled", onRollCancelled);
+  onDLAMessage("diceTrayRoll", onDiceTrayRoll);
+}
 
-  // Register "dice-link" as an interactive method that uses Foundry's default resolver
-  // Our dialog hooks will hide the resolver and ask DLA for the dice
-  CONFIG.Dice.fulfillment.methods["dice-link"] = {
-    label: "Dice Link Companion",
-    icon: "fa-dice-d20",
-    interactive: true
-    // No custom resolver - we use Foundry's default RollResolver instead
-  };
-  
-  debugResolverState("setup_fulfillment_complete", { methodRegistered: true });
+/**
+ * A roll is over (done, cancelled, or nothing to fill in): forget it, and redraw the DLC
+ * panel. Nothing on the panel is about the roll, but the redraw also brings it up to date
+ * with any change to the players' modes that came in since (kept from before the move).
+ */
+function endRoll() {
+  clearRollState();
+  refreshPanel();
 }
 
 // ============================================================================
-// DICE TRAY ROLL - Uses Foundry's Native System
+// PHASE A: the button chosen in DLA
 // ============================================================================
 
-/**
- * Execute a dice tray roll using Foundry's native Roll.evaluate().
- * Foundry will show its RollResolver dialog, which our dialog-mirroring.js
- * will hide, asking DLA for the dice.
- */
-export async function executeDiceTrayRollManually(formula, flavorText) {
-  debugFulfillment("executeDiceTrayRollManually:", formula);
-  
+/** The "Roll Mode" picked in a mirrored roll dialog, or null if it has none. */
+function readDialogVisibility(dialogRef) {
   try {
-    const roll = new Roll(formula);
-    
-    // Foundry's evaluate() triggers the fulfillment system
-    // Our dialog hooks hide the RollResolver and ask DLA for the dice
-    await roll.evaluate();
-    
-    // Send to chat
-    await roll.toMessage({ 
-      speaker: ChatMessage.getSpeaker(), 
-      flavor: flavorText 
-    });
-    
-    return "success";
+    if (!dialogRef?.html) return null;
+    const html = $(windowElement(dialogRef.html));
+    const select = html.find('select[name$="rollMode"], select[name$="messageMode"]').first();
+    return select.length ? normaliseVisibility(select.val()) : null;
   } catch (e) {
-    debugError("Roll error:", e.message);
-    if (e.message?.includes("cancelled")) {
-      return "cancelled";
-    }
-    throw e;
+    return null;
   }
 }
 
-// ============================================================================
-// MIRRORED DIALOG SUBMISSION
-// ============================================================================
+/**
+ * User clicked a button (Advantage/Normal/Disadvantage) in DLA.
+ * We apply config changes and click the hidden Foundry dialog button.
+ * This triggers Foundry to process and show its dice resolver.
+ */
+function onButtonSelect(rollId, buttonClicked, configChanges) {
+  debug("Phase A: Button selection from DLA", { rollId, buttonClicked, configChanges });
+
+  // Set phase to buttonClicked - prevents sending duplicate rollRequests
+  setDLAPhase("buttonClicked");
+
+  // Apply config changes to the hidden dialog if any
+  const dialogRef = getMirroredDialog();
+  if (dialogRef && configChanges && Object.keys(configChanges).length > 0) {
+    const originalHtml = $(windowElement(dialogRef.html));
+    for (const [name, value] of Object.entries(configChanges)) {
+      const input = originalHtml.find(`[name="${name}"]`);
+      if (input.length > 0) {
+        input.val(value);
+        input[0].dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  }
+
+  // Note this roll's visibility for its dice clip (the dialog is gone by then)
+  setRollClipVisibility(readDialogVisibility(dialogRef));
+
+  // Store the rollId for Phase B correlation
+  const pendingRoll = getPendingRollRequest();
+  if (pendingRoll) {
+    pendingRoll.dlaRollId = rollId;
+    pendingRoll.buttonClicked = buttonClicked;
+  }
+
+  // Click the button on the hidden Foundry dialog
+  // This triggers Foundry to process the roll and show dice resolver
+  if (buttonClicked && dialogRef?.data?.buttons) {
+    debug("Clicking hidden dialog button:", buttonClicked);
+    pressChosenButton(buttonClicked);
+  }
+}
 
 /**
- * Press the button DLA chose on the hidden roll dialog (main.mjs applies DLA's option
- * changes to the dialog first)
+ * Press the button DLA chose on the hidden roll dialog (onButtonSelect applies DLA's
+ * option changes to the dialog first)
+ * @param {string} buttonLabel - the label clicked in DLA, e.g. "Advantage", "Normal", "Disadvantage"
  */
-export async function submitMirroredDialog(userChoice) {
+async function pressChosenButton(buttonLabel) {
   const dialogRef = getMirroredDialog();
   if (!dialogRef) {
     debugError("No mirrored dialog to submit");
     return;
   }
-  
+
   const { html, data: formData } = dialogRef;
-  
+
   const element = windowElement(html) || formData?.element;
-    
+
   if (!element) {
     debugError("Could not find dialog element to submit");
     return;
   }
-  
-  debug("submitMirroredDialog: element found", JSON.stringify({
-    tagName: element?.tagName,
-    isConnected: element?.isConnected,
-    display: element?.style?.display,
-    open: element?.open,
-    id: element?.id
-  }));
-  debug("submitMirroredDialog: all buttons in formData", describeButtons(formData?.buttons));
-  debug("submitMirroredDialog: looking for button label", userChoice.buttonLabel);
+
+  debug("pressChosenButton: element found", describe(element));
+  debug("pressChosenButton: all buttons in formData", describe(formData?.buttons?.map(b => b.element)));
+  debug("pressChosenButton: looking for button label", buttonLabel);
 
   try {
     // Find the button that matches the user's choice
-    // userChoice.buttonLabel contains the label they clicked (e.g., "Advantage", "Normal", "Disadvantage")
-    let targetButton = null;
-    
-    if (userChoice.buttonLabel) {
-      // Find button with matching label
-      targetButton = formData.buttons.find(btn => 
-        btn.label.toLowerCase().trim() === userChoice.buttonLabel.toLowerCase().trim()
-      );
-    }
+    let targetButton = formData.buttons.find(btn =>
+      btn.label.toLowerCase().trim() === buttonLabel.toLowerCase().trim()
+    );
     
     // Fallback: try to find any submit-like button
     if (!targetButton) {
-      targetButton = formData.buttons.find(btn => 
-        btn.label.toLowerCase().includes("ok") || 
+      targetButton = formData.buttons.find(btn =>
+        btn.label.toLowerCase().includes("ok") ||
         btn.label.toLowerCase().includes("roll") ||
         btn.label.toLowerCase().includes("submit") ||
         btn.label.toLowerCase().includes("normal")
       );
     }
-    
-    debug("submitMirroredDialog: targetButton result", JSON.stringify({
-      found: !!targetButton,
-      label: targetButton?.label,
-      tagName: targetButton?.element?.tagName,
-      type: targetButton?.element?.type,
-      dataAction: targetButton?.element?.dataset?.action
-    }));
+
+    debug("pressChosenButton: targetButton result", describe(targetButton?.element));
 
     if (targetButton?.element) {
       // .click() triggers ApplicationV2's _onClickAction which sets advantage/disadvantage mode.
@@ -143,14 +148,9 @@ export async function submitMirroredDialog(userChoice) {
 
       await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
 
-      debug("submitMirroredDialog: after click", JSON.stringify({
-        isConnected: element.isConnected,
-        open: element.open,
-        display: getComputedStyle(element).display,
-        visibility: element.style.visibility
-      }));
+      debug("pressChosenButton: after click", describe(element));
     } else {
-      debugError("Could not find target button:", userChoice.buttonLabel);
+      debugError("Could not find target button:", buttonLabel);
     }
   } catch (e) {
     debugError("Error submitting mirrored dialog:", e);
@@ -158,96 +158,150 @@ export async function submitMirroredDialog(userChoice) {
 }
 
 // ============================================================================
-// DSN SUPPRESSION
+// PHASE B: the dice values from DLA
 // ============================================================================
 
-// Whether the Dice So Nice module is switched on in this world
-const dsnActive = () => !!game.modules.get("dice-so-nice")?.active;
+/**
+ * User rolled dice and submitted results in DLA.
+ * We inject these values into Foundry's dice resolver.
+ */
+function onDiceResult(rollId, results) {
+  debug("Phase B: Dice results from DLA", JSON.stringify({ rollId, resultCount: results.length, results }));
+  clearRollClipVisibility();
 
-// Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
-let _savedDefaultMethod = null;
-// Hook ID for the explicit DSN suppression hook — null when not registered.
-let _dsnSuppressionHookId = null;
-// Original showForRoll — saved when we intercept it, restored on disconnect.
-let _origShowForRoll = null;
+  // Use the stored resolver reference rather than a DOM search, which could find stale resolvers
+  const resolver = getMirroredDialog()?.element;
+  patchResolverForDiagnostics(getMirroredDialog()?.app);
 
-function disableDSN() {
-  if (!dsnActive()) return;
-  if (game.dice3d) {
-    game.dice3d.messageHookDisabled = true;
-    if (_origShowForRoll === null) {
-      _origShowForRoll = game.dice3d.showForRoll.bind(game.dice3d);
-      game.dice3d.showForRoll = function(...args) {
-        if (game.dice3d?.messageHookDisabled) return Promise.resolve(false);
-        return _origShowForRoll(...args);
-      };
+  if (!resolver) {
+    debug("No roll resolver found in DOM for dice injection");
+    endRoll();
+    return;
+  }
+
+  debug("Found resolver element", describe(resolver));
+
+  // Find all dice input fields in the resolver
+  const allInputs = resolver.querySelectorAll('input[type="text"], input[type="number"], input:not([type])');
+  debug("Found inputs in resolver", allInputs.length, describe(allInputs));
+
+  // Inject dice values into the resolver inputs
+  let resultIndex = 0;
+  for (const input of allInputs) {
+    // Skip inputs that already have values or are hidden
+    if (input.value || input.type === 'hidden' || getComputedStyle(input).display === 'none') {
+      debug("Skipping input", JSON.stringify({ name: input.name, reason: input.value ? 'has-value' : input.type === 'hidden' ? 'hidden-type' : 'display-none' }));
+      continue;
+    }
+
+    if (resultIndex < results.length) {
+      const result = results[resultIndex];
+      const value = result.value;
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      debug("Injected dice value", JSON.stringify({ value, inputName: input.name, inputIndex: resultIndex }));
+      resultIndex++;
     }
   }
-  if (_dsnSuppressionHookId === null) {
-    _dsnSuppressionHookId = Hooks.on("diceSoNiceMessagePreProcess", (_msgId, eventObj) => {
-      eventObj.willTrigger3DRoll = false;
+
+  debug("Injection complete", JSON.stringify({ injectedCount: resultIndex, totalResults: results.length }));
+
+  setTimeout(() => {
+    // Log every button in the resolver so we know exactly what's available
+    debug("Resolver all buttons", describe(resolver.querySelectorAll('button')));
+
+    // Look for submit button in resolver
+    const submitBtn = resolver.querySelector(
+      'button[type="submit"], ' +
+      'button[data-action="submit"], ' +
+      'button[data-action="fulfill"], ' +
+      '.dialog-button.submit, ' +
+      'button.submit'
+    );
+
+    // Also check if resolver itself is a form (v14 pattern)
+    const resolverIsForm = resolver.tagName === 'FORM';
+    const innerForm = resolverIsForm ? null : resolver.querySelector('form');
+
+    debug("Resolver submit search", describe(submitBtn), JSON.stringify({ resolverIsForm, innerFormFound: !!innerForm }));
+
+    if (submitBtn) {
+      debug("Clicking resolver submit button", submitBtn.textContent?.trim());
+      submitBtn.click();
+    } else {
+      const form = innerForm || (resolverIsForm ? resolver : null);
+      if (form) {
+        debug("Submitting resolver form directly");
+        form.requestSubmit();
+      } else {
+        const anyBtn = Array.from(resolver.querySelectorAll('button')).find(btn =>
+          btn.textContent?.toLowerCase().includes('submit') ||
+          btn.textContent?.toLowerCase().includes('ok') ||
+          btn.textContent?.toLowerCase().includes('roll')
+        );
+        if (anyBtn) {
+          debug("Clicking fallback button", anyBtn.textContent?.trim());
+          anyBtn.click();
+        } else {
+          debug("No submit mechanism found in resolver — roll will not complete");
+        }
+      }
+    }
+
+    endRoll();
+  }, 100);
+}
+
+// ============================================================================
+// CANCEL: roll cancelled by the user in DLA
+// ============================================================================
+
+/**
+ * Close the hidden Foundry window and clear the roll in progress
+ */
+function onRollCancelled(rollId) {
+  clearRollClipVisibility();
+  debug("Roll cancelled by DLA user", { rollId });
+
+  const dialogRef = getMirroredDialog();
+
+  // Close the hidden Foundry dialog — bypass RollResolver.close() to avoid auto-fill
+  if (dialogRef?.app) {
+    try {
+      Roll.defaultImplementation.RESOLVERS.delete(dialogRef.app.roll);
+      foundry.applications.api.ApplicationV2.prototype.close.call(dialogRef.app, { force: true });
+    } catch(e) {
+      debug("Error closing dialog app:", e);
+    }
+  }
+
+  endRoll();
+}
+
+// ============================================================================
+// DICE TRAY ROLL - Uses Foundry's Native System
+// ============================================================================
+
+/**
+ * DLA's dice tray started a roll. Run the formula with Foundry's own Roll.evaluate(); this
+ * triggers the normal flow (Foundry shows its resolver, dialog-mirroring.js hides it and
+ * asks DLA for the dice, and so on), then the roll goes to chat.
+ */
+async function onDiceTrayRoll(formula, flavor) {
+  debug("Dice tray roll from DLA", { formula, flavor });
+
+  try {
+    const roll = new Roll(formula);
+    await roll.evaluate();
+    await roll.toMessage({
+      speaker: ChatMessage.getSpeaker(),
+      flavor
     });
+  } catch (e) {
+    debugError("Roll error:", e.message);
+    if (e.message?.includes("cancelled")) return;   // cancelled in DLA: nothing to report
+    debug("Error executing dice tray roll:", e);
+    ui.notifications?.error(`Dice roll error: ${e.message}`);
   }
-}
-
-export function restoreDSN() {
-  if (!dsnActive()) return;
-  if (game.dice3d) {
-    game.dice3d.messageHookDisabled = false;
-    if (_origShowForRoll !== null) {
-      game.dice3d.showForRoll = _origShowForRoll;
-      _origShowForRoll = null;
-    }
-  }
-  if (_dsnSuppressionHookId !== null) {
-    Hooks.off("diceSoNiceMessagePreProcess", _dsnSuppressionHookId);
-    _dsnSuppressionHookId = null;
-  }
-}
-
-// ============================================================================
-// FULFILLMENT MODE APPLICATION
-// ============================================================================
-
-/** Foundry's die types (d4, d6, ... d100) - the dice Dice Link fills in. */
-function dieTerms() {
-  return Object.keys(CONFIG.Dice.terms).filter(term => /^d\d+$/.test(term) && CONFIG.Dice.terms[term]);
-}
-
-/**
- * Apply Dice Link fulfillment to all dice for manual mode users.
- * Called when user is set to manual mode.
- */
-export function applyDiceLinkFulfillment() {
-  // Only save the original on first call — guards against double-calls overwriting the
-  // real original with "dice-link" (which would then be "restored" to "dice-link" on exit)
-  if (_savedDefaultMethod === null) {
-    _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
-  }
-
-  const diceTypes = dieTerms();
-  for (const die of diceTypes) {
-    CONFIG.Dice.fulfillment.dice[die] = "dice-link";
-  }
-
-  CONFIG.Dice.fulfillment.defaultMethod = "dice-link";
-  disableDSN();
-  debugResolverState("apply_dice_link_fulfillment", { diceTypesCount: diceTypes.length, savedMethod: _savedDefaultMethod });
-}
-
-/**
- * Remove Dice Link fulfillment from all dice (return to digital).
- * Called when user switches to digital mode.
- */
-export function removeDiceLinkFulfillment() {
-  const diceTypes = dieTerms();
-  for (const die of diceTypes) {
-    delete CONFIG.Dice.fulfillment.dice[die];
-  }
-
-  // Restore whatever was configured before DLC wrote to this — don't just clear it
-  CONFIG.Dice.fulfillment.defaultMethod = _savedDefaultMethod ?? "";
-  _savedDefaultMethod = null;
-  restoreDSN();
-  debugResolverState("remove_dice_link_fulfillment", { diceTypesCount: diceTypes.length });
 }

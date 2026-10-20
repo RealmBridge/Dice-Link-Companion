@@ -1,15 +1,24 @@
 /**
  * dialog-mirroring.js - Foundry's roll windows, for a user in manual mode.
  * With DLA connected: hides each roll window (the roll's options dialog, then Foundry's
- * dice resolver) and passes DLA what it needs - the roll's buttons and options (stored
- * as the "mirrored dialog"; main.mjs sends it to DLA), then which dice to roll.
+ * dice resolver) and sends DLA what it needs - the roll request (the roll's buttons and
+ * options; the window is kept as the "mirrored dialog" so DLA's choice can be carried
+ * out), then which dice to roll. dice-fulfillment.js carries out DLA's answers.
  * Without DLA: unlocks Foundry's resolver so the player can type their dice values.
  */
 
 import { isUserInManualMode } from "./settings.js";
-import { debug, debugError, debugRollWindow, describeButtons } from "./debug.js";
+import { debug, debugError, debugRollWindow, describe } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
-import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setDLAPhase, clearRollState } from "./state-management.js";
+import {
+  getMirroredDialog,
+  setMirroredDialog,
+  getPendingRollRequest,
+  setPendingRollRequest,
+  getDLAPhase,
+  setDLAPhase,
+  clearRollState
+} from "./state-management.js";
 
 /**
  * The page element of a window Foundry hands to a render hook. Foundry 13-14 hand the
@@ -21,6 +30,15 @@ export function windowElement(html) {
   if (html?.element) return html.element;
   if (html?.nodeType === 1) return html;
   return null;
+}
+
+/**
+ * A roll window's page element: from what the render hook handed over, else from the
+ * window itself (an older window keeps it as a jQuery object), else by its app ID.
+ */
+function rollWindowElement(app, html) {
+  return windowElement(html) || app?.element?.[0] || app?.element ||
+    document.querySelector(`[data-appid="${app?.appId}"]`);
 }
 
 /** Whether a roll window is Foundry's dice resolver (the window asking for each die's value). */
@@ -208,8 +226,8 @@ function isRollDialog(app) {
 
 /**
  * Pass a roll's options window (e.g. dnd5e's roll configuration dialog) to DLA: store it
- * with its buttons and options as the "mirrored dialog"; main.mjs's listener then sends
- * DLA the roll request. The caller hides the window afterwards.
+ * with its buttons and options as the "mirrored dialog", then send DLA the roll request.
+ * The caller hides the window afterwards.
  */
 function passRollDialogToDLA(app, html) {
   try {
@@ -222,11 +240,7 @@ function passRollDialogToDLA(app, html) {
     }
 
     // Log element state so we can see whether the duplicate-call guard is working
-    debug("[DLC-DUPLICATE-CHECK] element state when guard runs", {
-      display: dialogElement.style?.display || "(not set)",
-      visibility: dialogElement.style?.visibility || "(not set)",
-      tagName: dialogElement.tagName
-    });
+    debug("[DLC-DUPLICATE-CHECK] element state when guard runs", describe(dialogElement));
 
     // Skip if element is already hidden - this means we've already processed it
     // The hook fires twice (renderRollConfigurationDialog + renderApplicationV2) and
@@ -239,12 +253,13 @@ function passRollDialogToDLA(app, html) {
     // The window's buttons and options, for DLA
     const formData = extractDialogFormData(app, html);
 
-    // Store the dialog reference in state; the state listener in main.mjs sends DLA the roll request
+    // Keep the dialog (DLA's chosen button is pressed on it later), then ask DLA
     setMirroredDialog({
       app,
       html,
       data: formData
     });
+    sendRollRequest(formData);
 
     debugRollWindow("setMirroredDialog called successfully", {});
 
@@ -256,28 +271,22 @@ function passRollDialogToDLA(app, html) {
 
 /**
  * Pass Foundry's dice resolver (the window asking for each die's value) to DLA: send DLA
- * the dice to roll, then hide the resolver. main.mjs fills in the values DLA sends back.
+ * the dice to roll, then hide the resolver. dice-fulfillment.js fills in the values DLA
+ * sends back.
  */
 function passRollResolverToDLA(app, html) {
   try {
-    const element = windowElement(html) || app?.element?.[0] || app?.element;
+    const element = rollWindowElement(app, html);
     if (!element) {
       debug("passRollResolverToDLA: Could not find element");
       return;
     }
-    
+
     // Extract dice inputs from Foundry's resolver
     const diceInputs = element.querySelectorAll("input[type='number'], input[data-die]");
 
-    debug("passRollResolverToDLA: element found", JSON.stringify({
-      tagName: element.tagName,
-      id: element.id,
-      className: element.className,
-      open: element.open
-    }));
-    debug("passRollResolverToDLA: all inputs in element", JSON.stringify(Array.from(
-      element.querySelectorAll("input")
-    ).map(i => ({ type: i.type, name: i.name, max: i.max, dataDie: i.dataset?.die, placeholder: i.placeholder }))));
+    debug("passRollResolverToDLA: element found", describe(element));
+    debug("passRollResolverToDLA: all inputs in element", describe(element.querySelectorAll("input")));
     debug("passRollResolverToDLA: inputs matching selector", diceInputs.length);
 
     // The die type of each value the resolver asks for, e.g. ["d20", "d6", "d6"]
@@ -294,7 +303,7 @@ function passRollResolverToDLA(app, html) {
     const rollType = priorRoll?.buttonClicked || "normal";
     const rollId = priorRoll?.dlaRollId || `dlc-${Date.now()}`;
 
-    // Store resolver reference (main.mjs fills its inputs when DLA sends the values)
+    // Store resolver reference (dice-fulfillment.js fills its inputs when DLA sends the values)
     setMirroredDialog({
       app,
       html,
@@ -334,9 +343,8 @@ function passRollResolverToDLA(app, html) {
  * Extract relevant form data from the native dialog
  */
 function extractDialogFormData(app, html) {
-  const element = windowElement(html) || app?.element?.[0] || app?.element ||
-    document.querySelector(`[data-appid="${app?.appId}"]`);
-  
+  const element = rollWindowElement(app, html);
+    
   if (!element) {
     return null;
   }
@@ -365,15 +373,7 @@ function extractDialogFormData(app, html) {
   
   // Extract form inputs
   const inputs = element.querySelectorAll("input, select, textarea");
-  debug("[DLC-INPUTS] all form elements found in dialog", JSON.stringify(Array.from(inputs).map(i => ({
-    tag: i.tagName,
-    type: i.type,
-    name: i.name,
-    id: i.id,
-    value: i.value,
-    checked: i.checked,
-    optionCount: i.tagName === "SELECT" ? i.options?.length : undefined
-  }))));
+  debug("[DLC-INPUTS] all form elements found in dialog", describe(inputs));
   for (const input of inputs) {
     const name = input.name || input.id;
     if (name) {
@@ -396,7 +396,7 @@ function extractDialogFormData(app, html) {
     data.formula = formulaElement.textContent.trim();
   }
 
-  debug("extractDialogFormData: buttons captured", describeButtons(data.buttons));
+  debug("extractDialogFormData: buttons captured", describe(data.buttons.map(b => b.element)));
 
   return data;
 }
@@ -421,13 +421,31 @@ function fieldLabel(fieldName) {
 }
 
 /**
- * Extract roll data from a mirrored dialog and format it for sending to DLA.
- * @param {Object} dialogData - Data from setMirroredDialog
- * @returns {Object} Formatted roll data for DLA
+ * Send DLA the roll request for a roll's options window - once per roll: not while the
+ * roll is already in its exchange with DLA (the window can render again after its button
+ * is pressed).
+ * @param {Object} formData - the window's buttons and options (extractDialogFormData)
  */
-export function extractRollDataForDLA(dialogData) {
-  const { data: formData } = dialogData;
+function sendRollRequest(formData) {
+  setPendingRollRequest({});
+  const currentPhase = getDLAPhase();
+  if (currentPhase) {
+    debug("Skipping rollRequest - already in DLA phase:", currentPhase);
+    return;
+  }
+  const request = rollRequestFor(formData);
+  debug("Sending roll request to Dice Link App", request);
+  sendMessage(request);
+  setDLAPhase("rollSent");
+}
 
+/**
+ * The roll request DLA is sent for a roll's options window: its title, the dice in its
+ * formula, its options and its buttons.
+ * @param {Object} formData - the window's buttons and options (extractDialogFormData)
+ * @returns {Object} the "rollRequest" message
+ */
+function rollRequestFor(formData) {
   const dice = [];
   const formulaMatch = formData?.formula?.match(/(\d*)d(\d+)/gi) || [];
   for (const match of formulaMatch) {
@@ -464,11 +482,12 @@ export function extractRollDataForDLA(dialogData) {
   debug("[DLC-EXTRACT] buttons built for DLA", JSON.stringify(buttons));
 
   return {
+    type: "rollRequest",
     title: formData?.title || "Roll",
     subtitle: formData?.formula || "",
     formula: formData?.formula || "",
     dice,
-    configFields,
+    config: { fields: configFields },
     buttons
   };
 }

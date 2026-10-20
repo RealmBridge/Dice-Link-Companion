@@ -6,7 +6,8 @@
 
 import { MODULE_ID } from "./constants.js";
 import { debug } from "./debug.js";
-import { emitToPlayers } from "./socket.js";
+import { emitToPlayers, onPlayerMessage } from "./socket.js";
+import { onDLAMessage } from "./qwebchannel-client.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -109,8 +110,6 @@ class BreakOverlayApp extends ApplicationV2 {
         if (el) {
           el.textContent = 'BREAK OVER';
           el.classList.add('break-over');
-          el.style.fontSize = '55px';
-          el.style.whiteSpace = 'nowrap';
         }
       } else {
         if (el) el.textContent = _formatTime(this.#remaining);
@@ -171,7 +170,19 @@ class BreakOverlayApp extends ApplicationV2 {
 // PUBLIC API
 // ============================================================================
 
-export function handleStartBreak(data) {
+/**
+ * Start a break when the GM starts one from DLA's timer, and keep each screen's break
+ * window in step with the others. Called from main.mjs setup.
+ */
+export function setupBreaks() {
+  onDLAMessage("startBreak", handleStartBreak);
+  onPlayerMessage("breakStart", (data) => showBreakOverlay(data.durationMinutes, data.players));
+  onPlayerMessage("breakPlayerBack", (data) => markPlayerStatus(data.userId, true));
+  onPlayerMessage("breakPlayerAway", (data) => markPlayerStatus(data.userId, false));
+  onPlayerMessage("breakEnd", () => endBreak(false));
+}
+
+function handleStartBreak(data) {
   if (!game.user?.isGM) return;
   const durationMinutes = data.durationMinutes || 10;
   debug("handleStartBreak", { durationMinutes });
@@ -191,7 +202,7 @@ export function handleStartBreak(data) {
   showBreakOverlay(durationMinutes, players);
 }
 
-export function showBreakOverlay(durationMinutes, players) {
+function showBreakOverlay(durationMinutes, players) {
   endBreak(false);
 
   _breakApp = new BreakOverlayApp();
@@ -203,14 +214,14 @@ export function showBreakOverlay(durationMinutes, players) {
  * Mark a player as back from the break (isBack) or stepped away. When it's this player
  * pressing their own button (isSelf), tell everyone else too.
  */
-export function markPlayerStatus(userId, isBack, isSelf = false) {
+function markPlayerStatus(userId, isBack, isSelf = false) {
   _breakApp?.setPlayerStatus(userId, isBack);
   if (isSelf) {
     emitToPlayers({ action: isBack ? "breakPlayerBack" : "breakPlayerAway", userId });
   }
 }
 
-export function endBreak(unpause = true) {
+function endBreak(unpause = true) {
   _breakApp?.close({ force: true });   // close() stops the countdown and forgets the window
   if (unpause && game.user?.isGM && game.paused) {
     game.togglePause(false, { broadcast: true });

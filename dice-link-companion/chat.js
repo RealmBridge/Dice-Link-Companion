@@ -36,7 +36,7 @@ export async function createRequestChatMessage(playerId, playerName) {
   });
 
   const playerContent = `
-    <div class="dice-link-result" style="border-left: 4px solid #7c3aed; padding: 10px;">
+    <div class="dice-link-result dlc-result-sent">
       <p>Your request for manual dice has been sent to the GM.</p>
     </div>
   `;
@@ -52,11 +52,10 @@ export async function createRequestChatMessage(playerId, playerName) {
  */
 export async function createApprovalChatMessage(playerId, playerName, approved) {
   const status = approved ? "APPROVED" : "DENIED";
-  const color = approved ? "#10b981" : "#ef4444";
 
   const content = `
-    <div class="dice-link-result" style="border-left: 4px solid ${color}; padding: 10px;">
-      <p><strong>${playerName}</strong>'s request for manual dice has been <strong style="color: ${color};">${status}</strong>.</p>
+    <div class="dice-link-result ${approved ? "dlc-result-approved" : "dlc-result-denied"}">
+      <p><strong>${playerName}</strong>'s request for manual dice has been <strong class="dlc-result-status">${status}</strong>.</p>
     </div>
   `;
 

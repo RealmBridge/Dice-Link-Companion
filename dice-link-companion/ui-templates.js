@@ -44,11 +44,11 @@ function headerHTML() {
 /**
  * A panel section that folds: its heading (the +/- button and the title) and its content.
  * @param {string} section - the key its folded state is saved under (collapsedSections)
- * @param {string} [extraClass] / [style] - for the top Settings section and Pending Requests
+ * @param {string} [extraClass] - for the top Settings section and Pending Requests
  */
-function sectionHTML(section, collapsed, icon, title, contentHTML, extraClass = "", style = "") {
+function sectionHTML(section, collapsed, icon, title, contentHTML, extraClass = "") {
   return `
-        <div class="dlc-section ${extraClass} ${collapsed ? 'collapsed' : ''}"${style ? ` style="${style}"` : ''}>
+        <div class="dlc-section ${extraClass} ${collapsed ? 'collapsed' : ''}">
           <div class="dlc-section-header" data-section="${section}">
             <span class="dlc-collapse-btn">${collapsed ? '+' : '−'}</span>
             <h3><i class="fas ${icon}"></i> ${title}</h3>
@@ -163,12 +163,12 @@ function generateGMPanelContent() {
               </label>
               <span class="dlc-toggle-label">${gmMode === PLAYER_MODES.MANUAL ? 'Manual' : 'Digital'}</span>
             </div>
-            <button type="button" class="dlc-refresh-icon-btn dlc-refresh-btn" title="Refresh Panel" style="margin-top: 4px;">
+            <button type="button" class="dlc-refresh-icon-btn dlc-refresh-btn" title="Refresh Panel">
               <i class="fas fa-sync-alt"></i>
             </button>
           </div>
           </div>
-        </div>`, "dlc-top-section", "margin: 12px 12px 0 12px;")}
+        </div>`, "dlc-top-section")}
 
       <!-- Bottom Sections -->
       <div class="dlc-bottom-sections">
@@ -244,7 +244,7 @@ function generatePlayerPanelContent() {
       ${headerHTML()}
 
       <!-- Bottom Sections -->
-      <div class="dlc-bottom-sections" style="padding-top: 12px;">
+      <div class="dlc-bottom-sections">
         <!-- Player Modes - Two Column Layout -->
         ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", "Player Modes", `
             ${modeLegendHTML(false)}
@@ -276,7 +276,7 @@ function generatePlayerPanelContent() {
               `).join('')}
             </div>
             ${globalOverride !== GLOBAL_OVERRIDE_MODES.INDIVIDUAL ? `
-              <p class="dlc-no-players" style="margin-top: 10px;">
+              <p class="dlc-no-players">
                 <i class="fas fa-lock"></i> GM has set global override: ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL ? "All Manual" : "All Digital"}
               </p>
             ` : ''}`)}

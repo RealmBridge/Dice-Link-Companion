@@ -129,6 +129,7 @@
   font-size: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
+  margin-top: 4px;
 }
 
 .dlc-refresh-icon-btn:hover {
@@ -701,10 +702,32 @@
 }
 
 .dice-link-result {
-  padding: 12px;
+  padding: 10px;
   margin: 5px 0;
   border-radius: 4px;
   background: var(--dlc-bg-section);
+}
+
+/* The coloured edge of each result card (request sent, approved, denied) and the
+   APPROVED / DENIED word in the same colour */
+.dice-link-result.dlc-result-sent {
+  border-left: 4px solid #7c3aed;
+}
+
+.dice-link-result.dlc-result-approved {
+  border-left: 4px solid var(--dlc-success);
+}
+
+.dice-link-result.dlc-result-denied {
+  border-left: 4px solid var(--dlc-danger);
+}
+
+.dice-link-result.dlc-result-approved .dlc-result-status {
+  color: var(--dlc-success);
+}
+
+.dice-link-result.dlc-result-denied .dlc-result-status {
+  color: var(--dlc-danger);
 }
 
 .dice-link-result p {
@@ -719,6 +742,15 @@
 
 /* The player panel uses the GM panel's grid and cards (.dlc-players-grid, .dlc-player-card),
    a little tighter */
+.dlc-player-panel .dlc-bottom-sections {
+  padding-top: 12px;
+}
+
+/* The player panel's "GM has set global override" line */
+.dlc-player-panel .dlc-no-players {
+  margin-top: 10px;
+}
+
 .dlc-player-panel .dlc-players-grid {
   gap: 6px;
   grid-auto-rows: 44px;
@@ -929,6 +961,7 @@
 
 .dlc-break-countdown.break-over {
   color: #e53935;
+  font-size: 55px;
   white-space: nowrap;
   animation: dlc-break-over-flash 1.5s step-start infinite;
 }

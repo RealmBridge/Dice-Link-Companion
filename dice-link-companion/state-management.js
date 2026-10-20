@@ -5,8 +5,6 @@
  * clearing the roll when it ends. Nothing here is saved; saved settings are in settings.js.
  */
 
-import { debugError } from "./debug.js";
-
 // ============================================================================
 // STATE VARIABLES
 // ============================================================================
@@ -19,9 +17,6 @@ let mirroredDialog = null;
 // Prevents duplicate rollRequests when dialog re-renders after button click
 // Phases: null (idle), "rollSent" (waiting for button), "buttonClicked" (waiting for resolver), "diceRequested" (waiting for results)
 let dlaPhase = null;
-
-// State change listeners
-const mirroredDialogListeners = [];
 
 // ============================================================================
 // GETTERS
@@ -81,19 +76,10 @@ export function setCurrentPanelDialog(value) {
 
 /**
  * Set the mirrored dialog reference
- * Notifies all registered listeners when value changes
  * @param {Object|null} value - The mirrored dialog to set
  */
 export function setMirroredDialog(value) {
   mirroredDialog = value;
-  // Notify all listeners of the state change
-  for (const listener of mirroredDialogListeners) {
-    try {
-      listener(value);
-    } catch (e) {
-      debugError("Error in mirroredDialog listener:", e);
-    }
-  }
 }
 
 /**
@@ -112,23 +98,4 @@ export function clearRollState() {
   setMirroredDialog(null);
   setPendingRollRequest(null);
   setDLAPhase(null);
-}
-
-// ============================================================================
-// STATE LISTENERS
-// ============================================================================
-
-/**
- * Register a listener for mirroredDialog state changes
- * @param {Function} callback - Called with new value when mirroredDialog changes
- * @returns {Function} Unsubscribe function
- */
-export function onMirroredDialogChange(callback) {
-  mirroredDialogListeners.push(callback);
-  return () => {
-    const index = mirroredDialogListeners.indexOf(callback);
-    if (index > -1) {
-      mirroredDialogListeners.splice(index, 1);
-    }
-  };
 }

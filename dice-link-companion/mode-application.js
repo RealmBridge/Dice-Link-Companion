@@ -1,22 +1,112 @@
 /**
  * mode-application.js - switches this user's dice between manual and digital.
- * Manual: Foundry asks for the dice values (DLA fills them in, or the player types them
- * if DLA isn't connected). Digital: Foundry rolls the dice itself.
- * Which mode a group override gives a player is decided in settings.js (getEffectiveMode).
+ * Registers "Dice Link Companion" as a Foundry dice fulfillment method. Manual: it becomes
+ * Foundry's default method for this user, so Foundry asks for the dice values (DLA fills
+ * them in, or the player types them if DLA isn't connected), and Dice So Nice stops
+ * animating the rolls. Digital: whatever was there before comes back and Foundry rolls the
+ * dice itself. Also decides which of the two applies at start-up and when the link to DLA
+ * comes or goes. Which mode a group override gives a player is decided in settings.js
+ * (getEffectiveMode).
  */
 
-import { applyDiceLinkFulfillment, removeDiceLinkFulfillment } from "./dice-fulfillment.js";
-import { getEffectiveMode } from "./settings.js";
-import { PLAYER_MODES } from "./constants.js";
+import { getEffectiveMode, getGlobalOverride, isUserInManualMode } from "./settings.js";
+import { PLAYER_MODES, GLOBAL_OVERRIDE_MODES } from "./constants.js";
+import { debugResolverState } from "./debug.js";
+
+// ============================================================================
+// THE DICE LINK METHOD
+// ============================================================================
 
 /**
- * Apply manual dice mode.
- * Always sets dice-link fulfillment so Foundry shows the RollResolver.
- * When DLA is connected, DLA fills values; when not, readOnly is stripped in
- * dialog-mirroring.js so the user can type directly.
+ * Setup Dice Link as a fulfillment method. Called from main.mjs setup.
+ * We DON'T register a custom resolver - instead we let Foundry use its native
+ * RollResolver, and our dialog-mirroring.js hooks hide it and ask DLA for the dice.
+ * This is the same hide-and-pass-on pattern used for roll dialogs.
+ */
+export function setupDiceMethod() {
+  debugResolverState("setup_fulfillment_starting", {});
+
+  // Register "dice-link" as an interactive method that uses Foundry's default resolver
+  // Our dialog hooks will hide the resolver and ask DLA for the dice
+  CONFIG.Dice.fulfillment.methods["dice-link"] = {
+    label: "Dice Link Companion",
+    icon: "fa-dice-d20",
+    interactive: true
+    // No custom resolver - we use Foundry's default RollResolver instead
+  };
+
+  debugResolverState("setup_fulfillment_complete", { methodRegistered: true });
+}
+
+// ============================================================================
+// DSN SUPPRESSION
+// ============================================================================
+
+// Whether the Dice So Nice module is switched on in this world
+const dsnActive = () => !!game.modules.get("dice-so-nice")?.active;
+
+// Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
+let _savedDefaultMethod = null;
+// Hook ID for the explicit DSN suppression hook — null when not registered.
+let _dsnSuppressionHookId = null;
+// Original showForRoll — saved when we intercept it, restored on disconnect.
+let _origShowForRoll = null;
+
+function disableDSN() {
+  if (!dsnActive()) return;
+  if (game.dice3d) {
+    game.dice3d.messageHookDisabled = true;
+    if (_origShowForRoll === null) {
+      _origShowForRoll = game.dice3d.showForRoll.bind(game.dice3d);
+      game.dice3d.showForRoll = function(...args) {
+        if (game.dice3d?.messageHookDisabled) return Promise.resolve(false);
+        return _origShowForRoll(...args);
+      };
+    }
+  }
+  if (_dsnSuppressionHookId === null) {
+    _dsnSuppressionHookId = Hooks.on("diceSoNiceMessagePreProcess", (_msgId, eventObj) => {
+      eventObj.willTrigger3DRoll = false;
+    });
+  }
+}
+
+function restoreDSN() {
+  if (!dsnActive()) return;
+  if (game.dice3d) {
+    game.dice3d.messageHookDisabled = false;
+    if (_origShowForRoll !== null) {
+      game.dice3d.showForRoll = _origShowForRoll;
+      _origShowForRoll = null;
+    }
+  }
+  if (_dsnSuppressionHookId !== null) {
+    Hooks.off("diceSoNiceMessagePreProcess", _dsnSuppressionHookId);
+    _dsnSuppressionHookId = null;
+  }
+}
+
+// ============================================================================
+// MANUAL AND DIGITAL
+// ============================================================================
+
+/**
+ * Apply manual dice mode: Dice Link becomes Foundry's default fulfillment method, so
+ * Foundry shows its RollResolver. When DLA is connected, DLA fills values; when not,
+ * readOnly is stripped in dialog-mirroring.js so the user can type directly.
+ * (Foundry uses this default for every die the player hasn't set a method for in
+ * Foundry's own Dice Configuration.)
  */
 async function applyManualDice() {
-  applyDiceLinkFulfillment();
+  // Only save the original on first call — guards against double-calls overwriting the
+  // real original with "dice-link" (which would then be "restored" to "dice-link" on exit)
+  if (_savedDefaultMethod === null) {
+    _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
+  }
+
+  CONFIG.Dice.fulfillment.defaultMethod = "dice-link";
+  disableDSN();
+  debugResolverState("apply_dice_link_fulfillment", { savedMethod: _savedDefaultMethod });
 }
 
 /**
@@ -24,7 +114,11 @@ async function applyManualDice() {
  * Always restores whatever fulfillment method was active before DLC wrote to it.
  */
 async function applyDigitalDice() {
-  removeDiceLinkFulfillment();
+  // Restore whatever was configured before DLC wrote to this — don't just clear it
+  CONFIG.Dice.fulfillment.defaultMethod = _savedDefaultMethod ?? "";
+  _savedDefaultMethod = null;
+  restoreDSN();
+  debugResolverState("remove_dice_link_fulfillment", {});
 }
 
 /**
@@ -45,9 +139,40 @@ function applyModeForOverride(override) {
   return applyMode(getEffectiveMode(game.user.id, override));
 }
 
+/**
+ * At start-up (each time Foundry loads, e.g. after a refresh): set this user's dice to the
+ * mode they're really in, whether or not DLA is there. Manual (own setting or the GM's
+ * override): manual dice - DLA fills them in once it connects, or without DLA the player
+ * types them in. The GM's "everyone digital" override: digital dice. Otherwise Foundry is
+ * left as it is, with Dice So Nice animating.
+ * (Foundry forgets DLC's dice setting on every reload, so it is set again here.)
+ */
+function applyStartingMode() {
+  restoreDSN();
+  if (isUserInManualMode()) {
+    applyManualDice();
+  } else if (getGlobalOverride() === GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL) {
+    applyDigitalDice();
+  }
+}
+
+/**
+ * The link to DLA came or went. Connected: a user in manual mode gets manual dice.
+ * Gone: back to digital dice (which also lets Dice So Nice animate again).
+ * @param {boolean} connected
+ */
+function applyModeForConnection(connected) {
+  if (!connected) {
+    applyDigitalDice();
+  } else if (isUserInManualMode()) {
+    applyManualDice();
+  }
+}
+
 export {
-  applyManualDice,
   applyDigitalDice,
   applyMode,
-  applyModeForOverride
+  applyModeForOverride,
+  applyStartingMode,
+  applyModeForConnection
 };

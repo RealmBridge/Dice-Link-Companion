@@ -447,7 +447,7 @@ let _lastReportedChatMode = null;
 
 /**
  * Foundry's current chat visibility (core messageMode) as public / gm / blind / self, or
- * null if unknown. Also used for who may see a dice clip (main.mjs).
+ * null if unknown. Also used for who may see a dice clip (video-feed.js).
  */
 export function currentChatVisibility() {
   try {

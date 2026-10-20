@@ -1,11 +1,16 @@
 /**
- * video-feed.js - shows the players' dice clips over the Foundry screen. Each player's
- * clip has its own spot; the clip fades out when their roll ends; the dice sound plays
- * while it runs. Also turns this player's own clip into small pictures for sending to the
- * other players (who may see it is decided in clip-visibility.js).
+ * video-feed.js - the players' dice clips over the Foundry screen. Each player's clip has
+ * its own spot; the clip fades out when their roll ends; the dice sound plays while it
+ * runs. Takes this player's own clip from DLA, shows it, and sends it as small pictures to
+ * the other players allowed to see it; shows the other players' clips this player may see
+ * (the rules are in clip-visibility.js).
  */
 
-import { debugCamera, debugError } from "./debug.js";
+import { debug, debugCamera, debugError } from "./debug.js";
+import { onDLAMessage } from "./qwebchannel-client.js";
+import { emitToPlayers, onPlayerMessage } from "./socket.js";
+import { clipGoesToOthers, clipShownToMe } from "./clip-visibility.js";
+import { currentChatVisibility } from "./chat-log.js";
 
 // ── Camera stream overlay (per-player, positioned) ────────────────────────────
 //
@@ -97,7 +102,7 @@ function _startRollingSound() {
  * @param {string} frameB64
  * @param {string} [playerId] - whose clip this is (defaults to the local user)
  */
-export function showDiceStreamFrame(frameB64, playerId) {
+function showDiceStreamFrame(frameB64, playerId) {
   playerId = _whose(playerId);
   const s = _getOrCreateStream(playerId);
 
@@ -155,7 +160,7 @@ export function showDiceStreamFrame(frameB64, playerId) {
  * The player keeps their spot (it is freed only on disconnect).
  * @param {string} [playerId]
  */
-export function endDiceStream(playerId) {
+function endDiceStream(playerId) {
   playerId = _whose(playerId);
   const s = _streams.get(playerId);
   if (!s) return;
@@ -192,7 +197,7 @@ function _removeStream(playerId) {
  * so the next (re)join fills the lowest empty spot rather than the next along.
  * @param {string} playerId
  */
-export function freeDiceStreamSlot(playerId) {
+function freeDiceStreamSlot(playerId) {
   const i = _slots.indexOf(playerId);
   if (i !== -1) _slots[i] = null;
   const s = _streams.get(playerId);
@@ -207,7 +212,7 @@ export function freeDiceStreamSlot(playerId) {
  * @param {(dataUrl: string|null) => void} callback
  * @param {number} [quality]
  */
-export function encodeSelfStreamWebP(callback, quality = 0.9) {
+function encodeSelfStreamWebP(callback, quality = 0.9) {
   const s = _streams.get(game.user?.id);
   if (!s || !s.canvas || !s.canvas.width || !s.canvas.height) { callback(null); return; }
   try {
@@ -222,4 +227,94 @@ export function encodeSelfStreamWebP(callback, quality = 0.9) {
     debugError('[Camera] WebP encode error:', e);
     callback(null);
   }
+}
+
+// ── This player's own clip, from DLA ──────────────────────────────────────────
+//
+// Who may see it (clip-visibility.js has the rules): the roll's own dialog may pick a
+// "Roll Mode" for that one roll; by the time the clip starts, Foundry has replaced that
+// dialog with the dice resolver, so dice-fulfillment.js notes it when the DLA button is
+// pressed. Rolls without one use the chat visibility setting (the one DLA's Public /
+// Whisper / Self only / GM only buttons set).
+let rollClipVisibility = null;   // this roll's visibility from its dialog, if it had one
+let clipActive = false;          // a clip is being sent right now
+let clipVisibility = null;       // locked when each clip starts
+let clipToOthers = true;         // whether this clip goes to the other players at all
+
+// Guards a race from the off-thread (async) broadcast encode: the last frame or
+// two can still be encoding when the stream ends, so without this flag they would
+// be emitted AFTER cameraStreamEnd and re-show the tray on other players with no
+// further stop to clear it. Setting it on stream-end makes any in-flight straggler
+// frame drop its broadcast, so cameraStreamEnd is always the last message sent.
+let localBroadcastEnded = false;
+
+/**
+ * A roll's button was pressed in DLA: its clip follows the "Roll Mode" picked in its
+ * dialog (null if it had none: the chat visibility then decides), and the next frame
+ * starts a new clip.
+ * @param {string|null} visibility - public / gm / blind / self
+ */
+export function setRollClipVisibility(visibility) {
+  rollClipVisibility = visibility;
+  clipActive = false;
+}
+
+/** The roll is over (its dice values came, or it was cancelled): its own Roll Mode no longer applies. */
+export function clearRollClipVisibility() {
+  rollClipVisibility = null;
+}
+
+/**
+ * Take this player's clip from DLA: show it, and send it to the other players allowed to
+ * see it. Show the other players' clips, and free a player's spot when they disconnect.
+ * Called from main.mjs setup.
+ */
+export function setupDiceClips() {
+  // Display frame locally and broadcast to all other players via game.socket.
+  // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
+  onDLAMessage("cameraFrame", (frameB64) => {
+    const uid = game.user.id;
+    if (!clipActive) {
+      // First frame of a new clip: lock who may see it for the whole clip.
+      clipActive = true;
+      clipVisibility = rollClipVisibility || currentChatVisibility();
+      clipToOthers = clipGoesToOthers(clipVisibility, game.user.isGM);
+      debug("Dice clip visibility", { visibility: clipVisibility || "public", rollerIsGM: game.user.isGM, sentToOthers: clipToOthers });
+    }
+    localBroadcastEnded = false;
+    // Draw our own clip locally in our spot, then encode for broadcast OFF the main
+    // thread (async toBlob) so the roll result isn't held up behind the WebP encode.
+    showDiceStreamFrame(frameB64, uid);
+    if (!clipToOthers) return;   // Self only, or a DM's private roll: nobody else sees it
+    encodeSelfStreamWebP((networkFrame) => {
+      if (networkFrame && !localBroadcastEnded) {
+        emitToPlayers({
+          action: "cameraFrame", frameB64: networkFrame, userId: uid,
+          visibility: clipVisibility, rollerIsGM: game.user.isGM
+        });
+      }
+    });
+  });
+
+  onDLAMessage("cameraStreamEnd", () => {
+    const uid = game.user.id;
+    localBroadcastEnded = true;
+    const wasSent = clipToOthers;
+    clipActive = false;
+    endDiceStream(uid);
+    if (wasSent) emitToPlayers({ action: "cameraStreamEnd", userId: uid });
+  });
+
+  // Another player's clip. Private rolls: only the people allowed to see it draw it.
+  onPlayerMessage("cameraFrame", (data) => {
+    if (clipShownToMe(data.visibility, data.rollerIsGM, game.user.isGM)) {
+      showDiceStreamFrame(data.frameB64, data.userId);
+    }
+  });
+  onPlayerMessage("cameraStreamEnd", (data) => endDiceStream(data.userId));
+
+  // Free a player's clip spot when they disconnect, so a reconnect fills the lowest gap.
+  Hooks.on("userConnected", (user, connected) => {
+    if (!connected) freeDiceStreamSlot(user.id);
+  });
 }
