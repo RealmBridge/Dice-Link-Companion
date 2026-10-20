@@ -42,7 +42,7 @@ export function clipGoesToOthers(visibility, rollerIsGM) {
   return true;                           // a player's gm/blind roll: sent, only DMs show it
 }
 
-/** Should THIS player's add-on show a clip it received from another player? */
+/** Should this player's screen show a clip it received from another player? */
 export function clipShownToMe(visibility, rollerIsGM, iAmGM) {
   if (!visibility || visibility === "public") return true;
   if (visibility === "self" || rollerIsGM) return false;

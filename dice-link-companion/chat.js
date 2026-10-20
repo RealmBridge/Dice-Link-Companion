@@ -7,10 +7,6 @@
 // The GMs' user IDs: the cards are whispered to them
 const gmUserIds = () => game.users.filter(u => u.isGM).map(u => u.id);
 
-// ============================================================================
-// CHAT MESSAGE FUNCTIONS
-// ============================================================================
-
 /**
  * Create a chat message for a manual dice request
  * Sends approval buttons to GMs and confirmation to the requesting player

@@ -9,22 +9,18 @@ import { sendMessage, getConnectionStatus, onDLAMessage } from "./qwebchannel-cl
 import { debug, debugChatLog } from "./debug.js";
 import { normaliseVisibility } from "./clip-visibility.js";
 
-// ============================================================================
-// OBSERVER + INTERACTION MAPS
-// ============================================================================
+// ---- Chat cards being watched, and their clickable parts ----
 
-// messageId → { observer, debounceTimer, timeoutTimer }
+// messageId -> { observer, debounceTimer, timeoutTimer }
 const _observerMap = new Map();
 
-// messageId → Map<dlaId (number), real DOM element>
+// messageId -> Map<dlaId (number), real DOM element>
 const _interactionMap = new Map();
 
 const DEBOUNCE_MS = 500;
 const OBSERVER_TIMEOUT_MS = 15000;
 
-// ============================================================================
-// HELPERS
-// ============================================================================
+// ---- Helpers ----
 
 /** A path on the Foundry server ("/x" or "x") as a full address on the given origin. */
 function toAbsolute(path, origin) {
@@ -44,7 +40,7 @@ function makeAbsolute(html) {
 
 /**
  * Number every interactive element inside a card's li DOM element and store
- * a map of dlaId → real element for later interaction forwarding.
+ * a map of dlaId -> real element for later interaction forwarding.
  * Returns the complete outerHTML of the numbered li with absolute URLs applied.
  */
 function numberAndSerialize(messageId, li) {
@@ -100,9 +96,7 @@ function sendCard(messageId, li, rollData) {
   sendMessage({ type: "chatMessage", messageId, html, rollData: rollData ?? null });
 }
 
-// ============================================================================
-// MUTATION OBSERVER MANAGEMENT
-// ============================================================================
+// ---- Watching a chat card for changes ----
 
 function disconnectObserver(messageId) {
   const state = _observerMap.get(messageId);
@@ -115,7 +109,7 @@ function disconnectObserver(messageId) {
 
 /**
  * Attach (or reactivate) a MutationObserver for a card's li element.
- * Safe to call multiple times — resets timers if the observer is still running.
+ * Safe to call multiple times - resets timers if the observer is still running.
  * Disconnects automatically after OBSERVER_TIMEOUT_MS of no mutations.
  */
 function attachObserver(messageId, li, rollData) {
@@ -150,9 +144,7 @@ function attachObserver(messageId, li, rollData) {
   state.timeoutTimer = setTimeout(() => disconnectObserver(messageId), OBSERVER_TIMEOUT_MS);
 }
 
-// ============================================================================
-// CHAT INTERACTION (DLA → DLC)
-// ============================================================================
+// ---- Clicks on a chat card in DLA ----
 
 /**
  * Handle a chatInteraction signal from DLA.
@@ -203,9 +195,7 @@ function handleChatInteraction({ messageId, dlaId, event, value }) {
   debugChatLog(`chatInteraction: fired ${event} on dlaId=${dlaId} in message ${messageId}`);
 }
 
-// ============================================================================
-// CSS SETUP
-// ============================================================================
+// ---- The page's styles, for DLA ----
 
 /**
  * Rewrite relative url() and bare @import path references in CSS text to absolute URLs.
@@ -368,7 +358,7 @@ async function sendChatSetup() {
 
   // Collect @font-face rules from constructable stylesheets.
   // Foundry systems (e.g. dnd5e) register custom icon fonts via JavaScript-built
-  // stylesheets that have no ownerNode textContent and no href — the blocks above skip them.
+  // stylesheets that have no ownerNode textContent and no href - the blocks above skip them.
   // The browser resolves @font-face src URLs to absolute form, so rule.cssText is safe to use directly.
   {
     const fontFaceBlocks = [];
@@ -411,7 +401,7 @@ async function sendChatSetup() {
   const bodyClasses = Array.from(document.body.classList);
   const rootFontSize = getComputedStyle(document.documentElement).fontSize;
 
-  // Read Foundry's sidebar width from its CSS variable — available regardless of collapse state
+  // Read Foundry's sidebar width from its CSS variable - available regardless of collapse state
   // because Foundry collapses via margin change, not width change.
   const sidebarWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 300;
 
@@ -428,11 +418,9 @@ async function sendChatSetup() {
   sendMessage({ type: "chatSetup", styleTexts, cssVars, bodyClasses, rootFontSize, sidebarWidth, interfaceTheme });
 }
 
-// ============================================================================
-// CHAT VISIBILITY STATE — read Foundry's active chat type and report to DLA
-// ============================================================================
+// ---- Chat visibility, kept the same in Foundry and DLA ----
 
-// DLA mode key → Foundry v14 messageMode key (the other way round is the same table read
+// DLA mode key -> Foundry v14 messageMode key (the other way round is the same table read
 // backwards). In v14 the icon/key assignments shifted: "gm" means GM+sender both see (old
 // "whisper"), "blind" means GM-only/sender cannot see (old "GM only").
 const _DLA_TO_FOUNDRY = {
@@ -480,9 +468,7 @@ function _watchFoundryChatMode() {
   observer.observe(modesEl, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
 }
 
-// ============================================================================
-// PUBLIC API
-// ============================================================================
+// ---- Setup ----
 
 /**
  * Register the renderChatMessageHTML hook to forward new messages to DLA.
@@ -492,7 +478,7 @@ export function setupChatLog() {
   Hooks.on("renderChatMessageHTML", (message, element) => {
     if (!getConnectionStatus()) return;
 
-    // Skip messages older than 2 minutes — treat as historical re-renders, not new
+    // Skip messages older than 2 minutes - treat as historical re-renders, not new
     if (message.timestamp && (Date.now() - message.timestamp) > 120000) {
       debugChatLog("renderChatMessageHTML: skipping old message", message.id);
       return;

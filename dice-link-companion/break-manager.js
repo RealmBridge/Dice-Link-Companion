@@ -13,9 +13,7 @@ const { ApplicationV2 } = foundry.applications.api;
 
 let _breakApp = null;
 
-// ============================================================================
-// APPLICATION
-// ============================================================================
+// ---- The break window ----
 
 class BreakOverlayApp extends ApplicationV2 {
   #players = [];
@@ -166,9 +164,7 @@ class BreakOverlayApp extends ApplicationV2 {
   }
 }
 
-// ============================================================================
-// PUBLIC API
-// ============================================================================
+// ---- Starting, marking and ending a break ----
 
 /**
  * Start a break when the GM starts one from DLA's timer, and keep each screen's break
@@ -228,9 +224,7 @@ function endBreak(unpause = true) {
   }
 }
 
-// ============================================================================
-// PRIVATE HELPERS
-// ============================================================================
+// ---- Helpers ----
 
 function _formatTime(seconds) {
   const h = Math.floor(seconds / 3600);

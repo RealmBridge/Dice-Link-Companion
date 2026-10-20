@@ -1,8 +1,6 @@
 /* Dice Link Companion - Realm Bridge Branded Styles */
 
-/* ============================================================================
-   CSS VARIABLES - Realm Bridge Brand Colors
-   ============================================================================ */
+/* ---- Realm Bridge colours ---- */
 :root {
   --dlc-bg-dark: #212a37;
   --dlc-bg-section: #2a3547;
@@ -23,9 +21,7 @@
   --dlc-digital: #6366f1;
 }
 
-/* ============================================================================
-   FOUNDRY WINDOW HEADER OVERRIDE (for header buttons)
-   ============================================================================ */
+/* ---- Foundry's window header (its buttons) ---- */
 .dlc-dialog .window-header {
   background: var(--dlc-bg-section);
   border-bottom: 1px solid var(--dlc-border);
@@ -35,9 +31,7 @@
   color: var(--dlc-text-primary);
 }
 
-/* ============================================================================
-   MAIN PANEL CONTAINER
-   ============================================================================ */
+/* ---- The panel ---- */
 .dlc-panel {
   min-width: 420px;
   padding: 0 0 12px 0;
@@ -49,9 +43,7 @@
   flex-direction: column;
 }
 
-/* ============================================================================
-   HEADER WITH LOGO
-   ============================================================================ */
+/* ---- The logo header ---- */
 .dlc-header {
   display: flex;
   align-items: center;
@@ -82,9 +74,7 @@
   box-shadow: none;
 }
 
-/* ============================================================================
-   TOP ROW - 3 COLUMN LAYOUT (inside collapsible section)
-   ============================================================================ */
+/* ---- Settings row: three columns ---- */
 .dlc-top-section {
   border-color: var(--dlc-accent);
   margin: 8px 12px 0 12px !important;
@@ -137,9 +127,7 @@
   color: var(--dlc-text-primary);
 }
 
-/* ============================================================================
-   COLLAPSIBLE SECTIONS
-   ============================================================================ */
+/* ---- Sections that fold ---- */
 .dlc-section {
   background: var(--dlc-bg-section);
   border: 1px solid var(--dlc-border);
@@ -214,9 +202,7 @@
   display: none;
 }
 
-/* ============================================================================
-   TOP ROW MINI SECTIONS (no collapse)
-   ============================================================================ */
+/* ---- Settings row: its small sections ---- */
 .dlc-mini-section {
   background: var(--dlc-bg-section);
   border: 1px solid var(--dlc-border);
@@ -233,9 +219,7 @@
   color: var(--dlc-accent);
 }
 
-/* ============================================================================
-   PERMISSION TOGGLES
-   ============================================================================ */
+/* ---- Switches ---- */
 .dlc-role-toggles {
   display: flex;
   flex-direction: column;
@@ -312,9 +296,7 @@
   background-color: white;
 }
 
-/* ============================================================================
-   PLAYER MODES - FULL WIDTH TABLE
-   ============================================================================ */
+/* ---- Player Modes ---- */
 .dlc-players-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -521,9 +503,7 @@
   line-height: 1;
 }
 
-/* ============================================================================
-   BUTTONS
-   ============================================================================ */
+/* ---- Buttons ---- */
 .dlc-btn {
   padding: 6px 12px;
   background: var(--dlc-accent);
@@ -578,9 +558,7 @@
   color: var(--dlc-text-primary);
 }
 
-/* ============================================================================
-   BOTTOM SECTION WRAPPER
-   ============================================================================ */
+/* ---- Lower sections ---- */
 .dlc-bottom-sections {
   padding: 8px 12px;
   display: flex;
@@ -588,9 +566,7 @@
   gap: 8px;
 }
 
-/* ============================================================================
-   PENDING REQUESTS
-   ============================================================================ */
+/* ---- Pending Requests ---- */
 .dlc-pending-section {
   border-color: var(--dlc-warning);
 }
@@ -621,9 +597,7 @@
   color: var(--dlc-text-primary);
 }
 
-/* ============================================================================
-   NO PLAYERS MESSAGE
-   ============================================================================ */
+/* ---- No players message ---- */
 .dlc-no-players {
   text-align: center;
   padding: 20px;
@@ -632,9 +606,7 @@
   font-size: 12px;
 }
 
-/* ============================================================================
-   CHAT MESSAGE STYLES
-   ============================================================================ */
+/* ---- Chat cards ---- */
 .dice-link-request {
   padding: 12px;
   margin: 5px 0;
@@ -736,9 +708,7 @@
   color: var(--dlc-text-primary);
 }
 
-/* ============================================================================
-   PLAYER PANEL LAYOUT - matches GM panel grid behaviour
-   ============================================================================ */
+/* ---- The player panel (uses the GM panel's grid) ---- */
 
 /* The player panel uses the GM panel's grid and cards (.dlc-players-grid, .dlc-player-card),
    a little tighter */
@@ -773,9 +743,7 @@
   text-transform: uppercase;
 }
 
-/* ============================================================================
-   DIALOG OVERRIDES FOR FOUNDRY
-   ============================================================================ */
+/* ---- The panel window's content area ---- */
 .dlc-dialog {
   background: var(--dlc-bg-dark) !important;
   min-width: 420px !important;
@@ -799,9 +767,7 @@
   scrollbar-color: var(--dlc-border) transparent;
 }
 
-/* ============================================================================
-   BREAK OVERLAY
-   ============================================================================ */
+/* ---- The break window ---- */
 
 .dlc-break-panel {
   display: flex;

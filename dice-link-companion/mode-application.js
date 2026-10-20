@@ -13,15 +13,13 @@ import { getEffectiveMode, getGlobalOverride, isUserInManualMode } from "./setti
 import { PLAYER_MODES, GLOBAL_OVERRIDE_MODES } from "./constants.js";
 import { debugResolverState } from "./debug.js";
 
-// ============================================================================
-// THE DICE LINK METHOD
-// ============================================================================
+// ---- The Dice Link method ----
 
 /**
  * Setup Dice Link as a fulfillment method. Called from main.mjs setup.
- * We DON'T register a custom resolver - instead we let Foundry use its native
- * RollResolver, and our dialog-mirroring.js hooks hide it and ask DLA for the dice.
- * This is the same hide-and-pass-on pattern used for roll dialogs.
+ * There is no resolver of our own: Foundry's own RollResolver is used, and
+ * dialog-mirroring.js hides it and asks DLA for the dice, the same way as for the roll's
+ * options dialog.
  */
 export function setupDiceMethod() {
   debugResolverState("setup_fulfillment_starting", {});
@@ -38,18 +36,16 @@ export function setupDiceMethod() {
   debugResolverState("setup_fulfillment_complete", { methodRegistered: true });
 }
 
-// ============================================================================
-// DSN SUPPRESSION
-// ============================================================================
+// ---- Dice So Nice ----
 
 // Whether the Dice So Nice module is switched on in this world
 const dsnActive = () => !!game.modules.get("dice-so-nice")?.active;
 
-// Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
+// Saved fulfillment defaultMethod - captured before DLC overwrites it, restored on disconnect.
 let _savedDefaultMethod = null;
-// Hook ID for the explicit DSN suppression hook — null when not registered.
+// Hook ID for the explicit DSN suppression hook - null when not registered.
 let _dsnSuppressionHookId = null;
-// Original showForRoll — saved when we intercept it, restored on disconnect.
+// Original showForRoll - saved when we intercept it, restored on disconnect.
 let _origShowForRoll = null;
 
 function disableDSN() {
@@ -86,9 +82,7 @@ function restoreDSN() {
   }
 }
 
-// ============================================================================
-// MANUAL AND DIGITAL
-// ============================================================================
+// ---- Manual and digital ----
 
 /**
  * Apply manual dice mode: Dice Link becomes Foundry's default fulfillment method, so
@@ -98,7 +92,7 @@ function restoreDSN() {
  * Foundry's own Dice Configuration.)
  */
 async function applyManualDice() {
-  // Only save the original on first call — guards against double-calls overwriting the
+  // Only save the original on first call - guards against double-calls overwriting the
   // real original with "dice-link" (which would then be "restored" to "dice-link" on exit)
   if (_savedDefaultMethod === null) {
     _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
@@ -114,7 +108,7 @@ async function applyManualDice() {
  * Always restores whatever fulfillment method was active before DLC wrote to it.
  */
 async function applyDigitalDice() {
-  // Restore whatever was configured before DLC wrote to this — don't just clear it
+  // Restore whatever was configured before DLC wrote to this - don't just clear it
   CONFIG.Dice.fulfillment.defaultMethod = _savedDefaultMethod ?? "";
   _savedDefaultMethod = null;
   restoreDSN();

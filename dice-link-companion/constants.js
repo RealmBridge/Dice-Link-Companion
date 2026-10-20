@@ -4,7 +4,7 @@
  * defaults and Foundry's role names. Imports nothing from DLC, so any script can use it.
  */
 
-// Debug switch — set to false to silence all DLC console logging
+// Debug switch - set to false to silence all DLC console logging
 export const DEBUG = true;
 
 // Module metadata

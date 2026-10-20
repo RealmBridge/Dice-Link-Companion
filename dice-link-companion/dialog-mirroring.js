@@ -77,26 +77,20 @@ function sendDiceRequest(rollId, dice, formula, rollType) {
 export function setupDialogMirroring() {
   // Try specific dnd5e roll configuration dialog hooks
   Hooks.on("renderRollConfigurationDialog", (app, html) => {
-    debug("[DLC-HOOK] renderRollConfigurationDialog fired", { appName: app?.constructor?.name, appId: app?.id });
     handleDialogRender(app, html);
   });
 
   // Hook to detect when applications close (v14 uses closeApplicationV2)
   Hooks.on("closeApplicationV2", (app) => {
-    debug("[DLC-HOOK] closeApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id });
     const dialogRef = getMirroredDialog();
     if (dialogRef?.app === app) {
-      debug("Mirrored roll dialog closed — clearing state");
+      debug("Mirrored roll dialog closed - clearing state");
       clearRollState();
-    }
-    if (app?.element?.classList?.contains("dlc-dialog")) {
-      debug("DLC dialog is closing");
     }
   });
 
   // Generic hook for any application render - cast wide net
   Hooks.on("renderApplicationV2", (app, html) => {
-    debug("[DLC-HOOK] renderApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id, htmlType: html?.constructor?.name });
     handleDialogRender(app, html);
   });
 }
@@ -106,18 +100,13 @@ export function setupDialogMirroring() {
  */
 function handleDialogRender(app, html) {
   const htmlEl = windowElement(html);
-  debug("[DLC-HTML-DIAG] app=" + (app?.constructor?.name ?? "null") +
-    " nodeType=" + (htmlEl?.nodeType ?? "null") +
-    " htmlType=" + (htmlEl?.constructor?.name ?? "null") +
-    " inMainDoc=" + (htmlEl?.ownerDocument === document) +
-    " hasStyle=" + (htmlEl?.style !== undefined));
 
   if (!isUserInManualMode()) {
     return;
   }
 
   if (!getConnectionStatus()) {
-    // DLA not connected — if Foundry's RollResolver is showing, strip readOnly so the
+    // DLA not connected - if Foundry's RollResolver is showing, strip readOnly so the
     // user can type their physical dice values directly into Foundry's own inputs
     if (isRollDialog(app) && isResolverWindow(app) && htmlEl) {
       htmlEl.querySelectorAll('input[type="number"]').forEach(input => {
@@ -128,11 +117,8 @@ function handleDialogRender(app, html) {
     return;
   }
 
-  const isRoll = isRollDialog(app);
-  debug("[DLC-DIALOG] handleDialogRender", { appName: app?.constructor?.name, appId: app?.id, isRollDialog: isRoll });
-
   // Check if this is a roll dialog we should mirror
-  if (isRoll) {
+  if (isRollDialog(app)) {
     // Roll Resolution dialogs - hide, then ask DLA for the dice
     if (isResolverWindow(app)) {
       hideWindow(htmlEl);
@@ -148,8 +134,8 @@ function handleDialogRender(app, html) {
 }
 
 /**
- * Check if an application is a roll dialog we should mirror
- * Be SPECIFIC - only target dnd5e roll configuration dialogs, not other modules
+ * Check if an application is a roll dialog we should mirror: only dnd5e's own roll
+ * dialogs, never another module's windows
  */
 function isRollDialog(app) {
   if (!app) return false;
@@ -159,7 +145,7 @@ function isRollDialog(app) {
   const appId = (app.id || "").toLowerCase();
   const dialogTitle = (app.title || "").toLowerCase();
   
-  // EXCLUDE known third-party module dialogs by checking EXACT patterns
+  // Leave out the windows of other modules and of Foundry itself that could look like roll windows
   const excludedPatterns = [
     "monks-tokenbar",
     "tokenbar",
@@ -182,7 +168,7 @@ function isRollDialog(app) {
     return false;
   }
   
-  // Check app constructor name for SPECIFIC dnd5e roll dialog classes
+  // dnd5e's own roll dialog classes, by name
   const rollDialogClasses = [
     "rollconfigurationdialog",
     "d20roll",
@@ -231,22 +217,17 @@ function isRollDialog(app) {
  */
 function passRollDialogToDLA(app, html) {
   try {
-    debugRollWindow("Starting passRollDialogToDLA", { appTitle: app?.title, htmlType: html?.constructor?.name });
-
     const dialogElement = windowElement(html);
     if (!dialogElement) {
-      debugRollWindow("ERROR: Could not find the dialog element", { html });
+      debugRollWindow("Could not find the roll dialog's element", { app: app?.constructor?.name });
       return;
     }
-
-    // Log element state so we can see whether the duplicate-call guard is working
-    debug("[DLC-DUPLICATE-CHECK] element state when guard runs", describe(dialogElement));
 
     // Skip if element is already hidden - this means we've already processed it
     // The hook fires twice (renderRollConfigurationDialog + renderApplicationV2) and
     // the second time the element has visibility:hidden set by the first processing pass
     if (dialogElement.style?.visibility === 'hidden') {
-      debugRollWindow("Skipping - element already hidden (duplicate hook call)", {});
+      debugRollWindow("Already passed to DLA (its second render hook): skipped");
       return;
     }
 
@@ -260,12 +241,8 @@ function passRollDialogToDLA(app, html) {
       data: formData
     });
     sendRollRequest(formData);
-
-    debugRollWindow("setMirroredDialog called successfully", {});
-
   } catch (e) {
     debugError("Error mirroring dialog:", e);
-    debugRollWindow("ERROR in passRollDialogToDLA", { error: e.message, stack: e.stack });
   }
 }
 
@@ -285,16 +262,12 @@ function passRollResolverToDLA(app, html) {
     // Extract dice inputs from Foundry's resolver
     const diceInputs = element.querySelectorAll("input[type='number'], input[data-die]");
 
-    debug("passRollResolverToDLA: element found", describe(element));
-    debug("passRollResolverToDLA: all inputs in element", describe(element.querySelectorAll("input")));
-    debug("passRollResolverToDLA: inputs matching selector", diceInputs.length);
-
     // The die type of each value the resolver asks for, e.g. ["d20", "d6", "d6"]
     const diceTypes = Array.from(diceInputs, input =>
       `d${parseInt(input.max) || parseInt(input.dataset?.faces) || 20}`);
 
     if (diceTypes.length === 0) {
-      debug("passRollResolverToDLA: No dice inputs found");
+      debug("passRollResolverToDLA: no dice inputs found", describe(element.querySelectorAll("input")));
       return;
     }
 
@@ -331,7 +304,7 @@ function passRollResolverToDLA(app, html) {
     sendDiceRequest(rollId, consolidatedDice, formula, rollType);
     setDLAPhase("diceRequested");
 
-    // Hide resolver — DLA handles dice entry
+    // Hide resolver - DLA handles dice entry
     hideWindow(element);
     
   } catch (e) {
@@ -373,7 +346,6 @@ function extractDialogFormData(app, html) {
   
   // Extract form inputs
   const inputs = element.querySelectorAll("input, select, textarea");
-  debug("[DLC-INPUTS] all form elements found in dialog", describe(inputs));
   for (const input of inputs) {
     const name = input.name || input.id;
     if (name) {
@@ -396,11 +368,8 @@ function extractDialogFormData(app, html) {
     data.formula = formulaElement.textContent.trim();
   }
 
-  debug("extractDialogFormData: buttons captured", describe(data.buttons.map(b => b.element)));
-
   return data;
 }
-
 
 // Labels DLA shows for the roll options it knows; any other option name is made readable
 const FIELD_LABELS = {
@@ -477,9 +446,6 @@ function rollRequestFor(formData) {
       });
     }
   }
-
-  debug("[DLC-EXTRACT] configFields built for DLA", JSON.stringify(configFields));
-  debug("[DLC-EXTRACT] buttons built for DLA", JSON.stringify(buttons));
 
   return {
     type: "rollRequest",

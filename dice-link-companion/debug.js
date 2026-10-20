@@ -102,7 +102,7 @@ export function patchResolverForDiagnostics(resolverApp) {
  *
  * 1. Unhandled promise rejections (e.g. "null.rolling" after attack submit).
  * 2. Errors caught-and-logged by third-party code such as midi-qol's doDamageRoll,
- *    which calls console.error(message, err) — the stack trace is on the Error object
+ *    which calls console.error(message, err) - the stack trace is on the Error object
  *    but is never printed separately, so it never appears in the DLA log.
  *
  * Must be called once at module init before any rolls can occur.
@@ -146,7 +146,7 @@ function debugDSNStatus() {
   const dsnActive = !!game.modules.get("dice-so-nice")?.active;
   console.log(prefix, "DSN active:", dsnActive);
   if (!dsnActive) {
-    console.log(prefix, "DSN is not active — suppression not applicable");
+    console.log(prefix, "DSN is not active - suppression not applicable");
     return;
   }
 
@@ -178,7 +178,7 @@ if (DEBUG_ENABLED) {
   // Log every time DSN fires diceSoNiceMessagePreProcess during a real roll.
   // Registered before disableDSN() so we capture willTrigger3DRoll before it is modified.
   Hooks.on("diceSoNiceMessagePreProcess", (msgId, eventObj) => {
-    console.log("[Dice Link DSN Diag] diceSoNiceMessagePreProcess fired — msgId:", msgId,
+    console.log("[Dice Link DSN Diag] diceSoNiceMessagePreProcess fired - msgId:", msgId,
       "willTrigger3DRoll:", eventObj.willTrigger3DRoll);
   });
 }

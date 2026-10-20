@@ -7,10 +7,6 @@
 
 import { debugQWebChannel, debugError } from "./debug.js";
 
-// ============================================================================
-// CONNECTION STATE
-// ============================================================================
-
 let isConnected = false;
 let dlaInterface = null;
 let connectionChangeCallbacks = [];
@@ -47,41 +43,26 @@ const TO_DLA = {
   chatVisibilityState: "receiveChatMessage"
 };
 
-// ============================================================================
-// INITIALIZATION - Check for QWebChannel / DLA Interface
-// ============================================================================
+// ---- Connecting to DLA ----
 
 /**
- * Initialize QWebChannel connection with DLA
- * Called during Foundry ready hook
- *
- * DLC initiates contact first (reversed messaging pattern):
- * 1. DLC checks if dlaInterface exists
- * 2. If it does, DLC sends "dlcReady" message to announce it's loaded
- * 3. DLA responds by establishing connection
- * 4. This avoids timing issues with events firing before listeners are ready
- *
+ * Connect to DLA. Called from main.mjs at start-up.
+ * DLC makes the first contact: it waits for DLA's dlaInterface to appear in the page,
+ * tells DLA it has loaded (dlcModuleInitialized), and DLA answers (dlcModuleReady). Going
+ * this way round means no message from DLA can arrive before DLC is listening.
  * @returns {Promise<boolean>} True if connected to DLA
  */
 export async function connect() {
-  debugQWebChannel("Initializing QWebChannel connection", {});
-  debugQWebChannel("window.dlaInterface exists?", !!window.dlaInterface);
-
-  // Check if dlaInterface is already available (DLA loaded first)
+  // DLA's interface is usually there already (DLA loads the page)
   if (window.dlaInterface) {
-    debugQWebChannel("dlaInterface found immediately - announcing DLC is ready", {});
     return announceDLCReady(window.dlaInterface);
   }
 
   // If not available yet, wait briefly for it to appear
-  debugQWebChannel("dlaInterface not yet available - waiting...", {});
-
   return new Promise((resolve) => {
     const checkInterval = setInterval(() => {
-      debugQWebChannel("Checking for dlaInterface...", !!window.dlaInterface);
       if (window.dlaInterface) {
         clearInterval(checkInterval);
-        debugQWebChannel("dlaInterface became available", {});
         const result = announceDLCReady(window.dlaInterface);
         resolve(result);
       }
@@ -91,28 +72,19 @@ export async function connect() {
     setTimeout(() => {
       clearInterval(checkInterval);
       if (!window.dlaInterface) {
-        debugQWebChannel("dlaInterface never appeared - DLA not running in embedded mode", { timeout: 10000 });
+        debugQWebChannel("No DLA after 10 seconds: Foundry is not running inside the Dice Link App");
         resolve(false);
       }
     }, 10000);
   });
 }
 
-/**
- * Announce to DLA that DLC is ready and initialized
- * This triggers DLA to establish the connection
- * @param {Object} dlaIface - The dlaInterface object from DLA
- * @returns {Promise<boolean>} True if DLA acknowledged
- */
+/** Tell DLA that DLC has loaded, and wait for its answer (true once connected). */
 async function announceDLCReady(dlaIface) {
   try {
-    debugQWebChannel("announceDLCReady() called", { type: typeof dlaIface, keys: Object.keys(dlaIface) });
-
-    // Call the correct method on DLA interface to announce DLC is ready
+    // Tell DLA that DLC has loaded
     if (typeof dlaIface.dlcModuleInitialized === "function") {
-      debugQWebChannel("Calling dlcModuleInitialized()...", {});
       dlaIface.dlcModuleInitialized();
-      debugQWebChannel("dlcModuleInitialized() called successfully", {});
     } else {
       debugError("dlcModuleInitialized is NOT a function", {
         type: typeof dlaIface.dlcModuleInitialized,
@@ -122,7 +94,6 @@ async function announceDLCReady(dlaIface) {
     }
 
     // Wait for DLA's acknowledgement via dlcModuleReady signal
-    debugQWebChannel("Waiting for dlcModuleReady signal...", {});
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         debugError("dlcModuleReady signal TIMEOUT - DLA did not acknowledge", {});
@@ -130,10 +101,9 @@ async function announceDLCReady(dlaIface) {
       }, 5000);
 
       if (dlaIface.dlcModuleReady) {
-        debugQWebChannel("dlcModuleReady signal found, connecting...", {});
         dlaIface.dlcModuleReady.connect(function(ackJson) {
           clearTimeout(timeout);
-          debugQWebChannel("DLA acknowledged via dlcModuleReady signal", { ackJson });
+          debugQWebChannel("DLA answered: connected", { ackJson });
 
           // Setup the interface after DLA acknowledges
           const setupSuccess = setupDLAInterface(dlaIface);
@@ -151,23 +121,17 @@ async function announceDLCReady(dlaIface) {
   }
 }
 
-/**
- * Setup the DLA interface and connect all signal handlers
- * @param {Object} dlaIface - The dlaInterface object from DLA
- * @returns {boolean} True if setup successful
- */
+/** DLA answered: listen to every signal it sends, and tell DLC it's connected. */
 function setupDLAInterface(dlaIface) {
   try {
     dlaInterface = dlaIface;
     isConnected = true;
 
-    debugQWebChannel("Setting up signal handlers", {});
-
     // Connect a handler for every message DLA sends (see FROM_DLA)
     for (const [name, { signal, unpack, raw }] of Object.entries(FROM_DLA)) {
       if (!dlaInterface[signal]) continue;
       dlaInterface[signal].connect((...received) => {
-        if (!raw) debugQWebChannel(`Received ${name} signal`, {});
+        if (!raw) debugQWebChannel(`From DLA: ${name}`);
         const handler = handlers[name];
         if (handler) handler(...(raw ? received : unpack(JSON.parse(received[0]))));
       });
@@ -176,7 +140,6 @@ function setupDLAInterface(dlaIface) {
     // Connection status
     if (dlaInterface.connectionStatusReady) {
       dlaInterface.connectionStatusReady.connect((status) => {
-        debugQWebChannel("Received connectionStatus signal", { status });
         handleConnectionStatusChange(status);
       });
     }
@@ -184,10 +147,8 @@ function setupDLAInterface(dlaIface) {
     // Connection health check - ping/pong mechanism
     if (dlaInterface.connectionPingReady) {
       dlaInterface.connectionPingReady.connect(() => {
-        debugQWebChannel("Received ping, sending pong...", {});
         if (dlaInterface.receiveConnectionPong) {
           dlaInterface.receiveConnectionPong();
-          debugQWebChannel("Pong sent", {});
         } else {
           debugError("receiveConnectionPong method not available", {});
         }
@@ -205,14 +166,9 @@ function setupDLAInterface(dlaIface) {
   }
 }
 
-/**
- * Handle connection status changes from DLA
- * @param {string} status - "connected", "disconnected", "error"
- */
+/** DLA reported its connection status: "connected", "disconnected" or "error". */
 function handleConnectionStatusChange(status) {
   const wasConnected = isConnected;
-
-  debugQWebChannel("handleConnectionStatusChange", { status, wasConnected });
 
   if (status === "connected") {
     isConnected = true;
@@ -220,18 +176,14 @@ function handleConnectionStatusChange(status) {
     isConnected = false;
   }
 
-  debugQWebChannel("Connection state after handling", { isConnected });
+  debugQWebChannel("Connection status from DLA", { status, wasConnected, isConnected });
 
   if (wasConnected !== isConnected) {
-    debugQWebChannel("Connection state changed, notifying listeners", {});
     notifyConnectionChange(isConnected);
   }
 }
 
-/**
- * Notify all connection change callbacks
- * @param {boolean} connected - True if connected
- */
+/** Tell every DLC script that registered (onConnectionChange) that the link came or went. */
 function notifyConnectionChange(connected) {
   connectionChangeCallbacks.forEach(callback => {
     try {
@@ -242,25 +194,19 @@ function notifyConnectionChange(connected) {
   });
 }
 
-// ============================================================================
-// MESSAGE SENDING - Send data to DLA via QWebChannel
-// ============================================================================
+// ---- Sending to DLA ----
 
 /**
- * Send a message to DLA; its type decides which DLA receiver gets it
+ * Send a message to DLA; its type decides which DLA receiver gets it. Without DLA (a
+ * player using Foundry on its own) there is no one to send it to, so nothing is sent.
  * @param {Object} data - The message, with a "type"
  */
 export function sendMessage(data) {
-  debugQWebChannel("sendMessage called", { type: data.type, isConnected, hasDlaInterface: !!dlaInterface });
-
-  if (!isConnected || !dlaInterface) {
-    debugError("QWebChannel not connected, cannot send message", { messageType: data.type, isConnected, hasDlaInterface: !!dlaInterface });
-    return;
-  }
+  if (!isConnected || !dlaInterface) return;
 
   try {
     const jsonData = JSON.stringify(data);
-    debugQWebChannel("Sending message", { type: data.type, data: jsonData });
+    debugQWebChannel(`To DLA: ${data.type}`);
 
     const receiver = TO_DLA[data.type];
     if (receiver && dlaInterface[receiver]) {
@@ -273,9 +219,7 @@ export function sendMessage(data) {
   }
 }
 
-// ============================================================================
-// CALLBACK REGISTRATION
-// ============================================================================
+// ---- Registering for DLA's messages ----
 
 /**
  * Register the DLC function that handles one message from DLA (a name in FROM_DLA).
@@ -293,9 +237,7 @@ export function onConnectionChange(callback) {
   connectionChangeCallbacks.push(callback);
 }
 
-// ============================================================================
-// STATUS QUERIES
-// ============================================================================
+// ---- Connection status ----
 
 export function getConnectionStatus() {
   return isConnected;

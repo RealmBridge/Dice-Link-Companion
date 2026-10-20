@@ -25,11 +25,7 @@ import {
 
 import { getManualRollsPermissions } from "./settings-helpers.js";
 
-
-
-// ============================================================================
-// PIECES BOTH PANELS USE
-// ============================================================================
+// ---- Pieces both panels use ----
 
 /** The Realm Bridge logo header at the top of the panel. */
 function headerHTML() {
@@ -80,9 +76,7 @@ function modeLegendHTML(withRevoke) {
             </div>`;
 }
 
-// ============================================================================
-// GM PANEL CONTENT
-// ============================================================================
+// ---- The GM panel ----
 
 /**
  * Generate the complete GM control panel
@@ -215,9 +209,7 @@ function generateGMPanelContent() {
   `;
 }
 
-// ============================================================================
-// PLAYER PANEL CONTENT
-// ============================================================================
+// ---- The player panel ----
 
 /**
  * Generate the complete player control panel

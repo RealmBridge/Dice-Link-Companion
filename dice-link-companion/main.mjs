@@ -20,9 +20,7 @@ import { connect as connectToDLA, onConnectionChange as onDLAConnectionChange } 
 import { setupDiceClips } from "./video-feed.js";
 import { setupBreaks } from "./break-manager.js";
 
-// ============================================================================
-// SCENE CONTROLS - D20 BUTTON
-// ============================================================================
+// ---- The D20 button in Foundry's scene controls ----
 
 Hooks.on("getSceneControlButtons", (controls) => {
   if (!controls.tokens?.tools) return;
@@ -40,12 +38,10 @@ Hooks.on("getSceneControlButtons", (controls) => {
   };
 });
 
-// ============================================================================
-// INITIALIZATION HOOKS
-// ============================================================================
+// ---- Start-up ----
 
 /**
- * Initialize the module - register core settings and hooks
+ * Foundry is starting: register DLC's settings
  */
 Hooks.once("init", async () => {
   installErrorDiagnostics();
@@ -53,11 +49,11 @@ Hooks.once("init", async () => {
 });
 
 /**
- * Ready hook - set up UI and active features when game is ready
+ * The game is ready: start every DLC script and connect to DLA
  */
 Hooks.once("ready", async () => {
   try {
-    // Register per-user settings FIRST - wait for completion
+    // Each player's mode setting (the players are known by now)...
     registerPlayerModeSettings();
     // ...and for any player added later in the session (e.g. joining through a Forge
     // invite), so the GM can approve them without reloading; they show in the panel and
@@ -82,19 +78,10 @@ Hooks.once("ready", async () => {
     setupDiceClips();
     setupBreaks();
 
-    // Setup QWebChannel connection with DLA
-    // QWebChannel automatically detects if DLA is running via Qt
-    // If not running, features remain disabled
-    debug("Initializing QWebChannel connection with DLA (Qt embedded)...");
-    // (the "Connected to Dice Link App" notice comes from the connection change below)
-    connectToDLA().then(connected => {
-      if (connected) {
-        debug("QWebChannel: Connected to DLA");
-      } else {
-        debug("QWebChannel: DLA not detected - module running in standard Foundry mode");
-        // Leave Foundry's fulfillment system exactly as it was — nothing to restore
-      }
-    });
+    // Connect to DLA, if Foundry is running inside the Dice Link App (without it DLC still
+    // runs: the panel, manual dice typed into Foundry, and so on). The "Connected to Dice
+    // Link App" notice comes from the connection change below.
+    connectToDLA();
 
     // Handle connection status changes
     onDLAConnectionChange((connected) => {
@@ -103,16 +90,12 @@ Hooks.once("ready", async () => {
       if (connected) {
         ui.notifications?.info("Connected to Dice Link App");
         sendInitialChatHistory();
-        setTimeout(() => {
-          debug("Sending player modes after connection established");
-          sendPlayerModesToDLA();
-        }, 100);
+        setTimeout(sendPlayerModesToDLA, 100);
       }
     });
 
     applyStartingMode();
   } catch (error) {
-    debugError("ERROR in ready hook:", error);
-    debugError("Stack trace:", error.stack);
+    debugError("Error while starting DLC:", error, error.stack);
   }
 });

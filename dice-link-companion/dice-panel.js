@@ -48,9 +48,7 @@ const PLAYER_OVERRIDE_NOTICES = {
   [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "GM has returned to individual control."
 };
 
-// ============================================================================
-// THE PANEL WINDOW (ApplicationV2 for Foundry V13+)
-// ============================================================================
+// ---- The panel window ----
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -112,9 +110,7 @@ class DiceLinkCompanionApp extends ApplicationV2 {
   }
 }
 
-// ============================================================================
-// PANEL MANAGEMENT
-// ============================================================================
+// ---- Opening and redrawing the panel ----
 
 /**
  * Send DLA the player list for its Player Modes list: every player's mode and whether
@@ -167,7 +163,6 @@ export function setupPanelMessages() {
  * the player list and redraw the panel.
  */
 export function modesChanged() {
-  debug("Player mode changed - resending modes to DLA");
   sendPlayerModesToDLA();
   refreshPanel();
 }
@@ -195,19 +190,15 @@ function refreshPanel() {
  * Open the DLC panel (or bring to front if already open)
  */
 export function openPanel() {
-  debug("openPanel called");
   const panelDialog = getCurrentPanelDialog();
-  debug("getCurrentPanelDialog returned:", panelDialog);
   // If panel already exists and is rendered, just bring it to front - don't recreate
   if (panelDialog && panelDialog.rendered) {
-    debug("Panel exists and rendered, bringing to top");
     panelDialog.bringToFront();
     return;
   }
 
   // If panel exists but not rendered, close it first
   if (panelDialog) {
-    debug("Panel exists but not rendered, closing first");
     try {
       panelDialog.close();
     } catch (e) {
@@ -215,18 +206,13 @@ export function openPanel() {
     }
   }
 
-  debug("Creating new panel dialog");
   const isGM = game.user.isGM;
   const newPanelDialog = new DiceLinkCompanionApp(isGM);
-  debug("Setting currentPanelDialog");
   setCurrentPanelDialog(newPanelDialog);
-  debug("Rendering panel");
   newPanelDialog.render(true);
 }
 
-// ============================================================================
-// PANEL LISTENERS
-// ============================================================================
+// ---- The panel's buttons and switches ----
 
 /**
  * Fold / unfold a section when its heading is clicked (both panels), remembering it

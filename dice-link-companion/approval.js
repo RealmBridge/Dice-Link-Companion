@@ -20,9 +20,7 @@ import { createRequestChatMessage, createApprovalChatMessage } from "./chat.js";
 import { applyMode, applyDigitalDice } from "./mode-application.js";
 import { onDLAMessage } from "./qwebchannel-client.js";
 
-// ============================================================================
-// THE PLAYER: asking for manual dice, and switching back to digital
-// ============================================================================
+// ---- The player: asking for manual dice, and switching back to digital ----
 
 export function playerRequestManual() {
   const globalOverride = getGlobalOverride();
@@ -58,9 +56,7 @@ export function playerSwitchToDigital() {
   ui.notifications.info("Switched to digital dice.");
 }
 
-// ============================================================================
-// THE GM: Approve, Deny and Revoke
-// ============================================================================
+// ---- The GM: Approve, Deny and Revoke ----
 
 /**
  * Approve a player's request: they switch to manual dice.
@@ -90,7 +86,7 @@ async function answerManualRequest(playerId, approved) {
     return;
   }
 
-  // Remove the buttons from ALL chat messages for this player
+  // Remove the buttons from every chat card for this player's request
   $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
     $(this).closest(".dlc-chat-buttons").html(`<em>Request ${approved ? "approved" : "denied"}</em>`);
   });
@@ -124,9 +120,7 @@ export async function revokeManualDice(playerId) {
   ui.notifications.info(`Revoked manual dice for ${player.name}.`);
 }
 
-// ============================================================================
-// THE OTHER SCREENS: what arrives from the player or the GM
-// ============================================================================
+// ---- The other screens: what arrives from the player or the GM ----
 
 /** A player asked for manual dice: the GM's screen notes the request and posts the chat cards. */
 async function receiveManualRequest({ playerId, playerName }) {
@@ -161,9 +155,7 @@ function receiveRevoke({ playerId }) {
   ui.notifications.warn("GM has revoked your manual dice mode.");
 }
 
-// ============================================================================
-// SETUP
-// ============================================================================
+// ---- Setup ----
 
 /**
  * Hook up the Approve / Deny buttons on the chat cards and, for the GM, in DLA's player

@@ -21,10 +21,7 @@ const onModesSaved = () => modesChanged();
 const playerModeKey = (userId) => `playerMode_${userId}`;
 const isPlayerModeRegistered = (userId) => game.settings.settings.has(`${MODULE_ID}.${playerModeKey(userId)}`);
 
-/**
- * Register core settings during the "init" hook.
- * These settings are available immediately when Foundry loads.
- */
+/** The world's settings, registered as Foundry starts ("init"). */
 export function registerCoreSettings() {
   // Global override setting - controls whether all players are forced to a mode
   game.settings.register(MODULE_ID, "globalOverride", {
@@ -53,10 +50,7 @@ export function registerCoreSettings() {
   });
 }
 
-/**
- * Register per-user player mode settings during the "ready" hook.
- * This runs after users are loaded so we can iterate over them.
- */
+/** Every player's mode setting, registered once the players are known ("ready"). */
 export function registerPlayerModeSettings() {
   for (const user of game.users) {
     registerPlayerModeSetting(user.id);
@@ -85,28 +79,15 @@ export function registerPlayerModeSetting(userId) {
   }
 }
 
-/**
- * Get a setting value
- * @param {string} key - The setting key
- * @returns {*} The setting value
- */
 function getSetting(key) {
   return game.settings.get(MODULE_ID, key);
 }
 
-/**
- * Set a setting value
- * @param {string} key - The setting key
- * @param {*} value - The value to set
- */
 async function setSetting(key, value) {
   return game.settings.set(MODULE_ID, key, value);
 }
 
-/**
- * Get the current player's mode
- * @returns {string} "manual" or "digital"
- */
+/** A player's own mode setting, "manual" or "digital" (this user's if none is given). */
 export function getPlayerMode(userId = game.user.id) {
   // Setting not registered yet: return the default
   if (!isPlayerModeRegistered(userId)) return SETTING_DEFAULTS.playerMode;
@@ -118,52 +99,31 @@ export function getPlayerMode(userId = game.user.id) {
   }
 }
 
-/**
- * Set a player's mode
- * @param {string} userId - The user ID
- * @param {string} mode - "manual" or "digital"
- */
+/** Save a player's own mode, "manual" or "digital". */
 export async function setPlayerMode(userId, mode) {
   registerPlayerModeSetting(userId);   // a player added since this browser loaded the game
   return setSetting(playerModeKey(userId), mode);
 }
 
-/**
- * Get the global override setting
- * @returns {string} "individual", "forceAllManual", or "forceAllDigital"
- */
+/** The GM's group override: "individual", "forceAllManual" or "forceAllDigital". */
 export function getGlobalOverride() {
   return getSetting("globalOverride");
 }
 
-/**
- * Set the global override
- * @param {string} value - The override value
- */
 export async function setGlobalOverride(value) {
   return setSetting("globalOverride", value);
 }
 
-/**
- * Get pending approval requests
- * @returns {Array} Array of pending request objects
- */
+/** The manual dice requests waiting for the GM: [{ playerId, playerName }]. */
 export function getPendingRequests() {
   return getSetting("pendingRequests") || [];
 }
 
-/**
- * Set pending approval requests
- * @param {Array} requests - Array of pending request objects
- */
 export async function setPendingRequests(requests) {
   return setSetting("pendingRequests", requests);
 }
 
-/**
- * Get collapsed sections state
- * @returns {Object} Current collapsed sections state
- */
+/** Which panel sections this user has folded (all keys present, defaults filled in). */
 export function getCollapsedSections() {
   try {
     const saved = getSetting("collapsedSections");
@@ -177,10 +137,6 @@ export function getCollapsedSections() {
   }
 }
 
-/**
- * Set collapsed sections state
- * @param {Object} sections - The collapsed sections state
- */
 export async function setCollapsedSections(sections) {
   return setSetting("collapsedSections", sections);
 }
@@ -246,9 +202,8 @@ export function getPlayerModes(override = getGlobalOverride(), pending = getPend
 }
 
 /**
- * Check if the current user is in manual dice mode right now.
- * Defensive: returns false if settings are not ready yet.
- * @returns {boolean} true if user should use manual dice
+ * Whether this user is in manual dice mode right now (false if the settings aren't
+ * registered yet).
  */
 export function isUserInManualMode() {
   try {

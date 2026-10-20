@@ -14,9 +14,7 @@ import { onDLAMessage } from "./qwebchannel-client.js";
 import { normaliseVisibility } from "./clip-visibility.js";
 import { setRollClipVisibility, clearRollClipVisibility } from "./video-feed.js";
 
-// ============================================================================
-// SETUP
-// ============================================================================
+// ---- Setup ----
 
 /**
  * Register for DLA's side of each roll. Called from main.mjs setup.
@@ -28,9 +26,7 @@ export function setupDiceFulfillment() {
   onDLAMessage("diceTrayRoll", onDiceTrayRoll);
 }
 
-// ============================================================================
-// PHASE A: the button chosen in DLA
-// ============================================================================
+// ---- Phase A: the button chosen in DLA ----
 
 /** The "Roll Mode" picked in a mirrored roll dialog, or null if it has none. */
 function readDialogVisibility(dialogRef) {
@@ -81,7 +77,6 @@ function onButtonSelect(rollId, buttonClicked, configChanges) {
   // Click the button on the hidden Foundry dialog
   // This triggers Foundry to process the roll and show dice resolver
   if (buttonClicked && dialogRef?.data?.buttons) {
-    debug("Clicking hidden dialog button:", buttonClicked);
     pressChosenButton(buttonClicked);
   }
 }
@@ -107,10 +102,6 @@ async function pressChosenButton(buttonLabel) {
     return;
   }
 
-  debug("pressChosenButton: element found", describe(element));
-  debug("pressChosenButton: all buttons in formData", describe(formData?.buttons?.map(b => b.element)));
-  debug("pressChosenButton: looking for button label", buttonLabel);
-
   try {
     // Find the button that matches the user's choice
     let targetButton = formData.buttons.find(btn =>
@@ -127,17 +118,17 @@ async function pressChosenButton(buttonLabel) {
       );
     }
 
-    debug("pressChosenButton: targetButton result", describe(targetButton?.element));
+    debug("Pressing the button chosen in DLA:", buttonLabel, describe(targetButton?.element));
 
     if (targetButton?.element) {
       // .click() triggers ApplicationV2's _onClickAction which sets advantage/disadvantage mode.
-      // form.requestSubmit() only fires 'submit' — _onClickAction never runs, mode never applied.
+      // form.requestSubmit() only fires 'submit' - _onClickAction never runs, mode never applied.
       // visibility:hidden elements accept programmatic clicks; no need to reveal them first.
       targetButton.element.click();
 
       await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
 
-      debug("pressChosenButton: after click", describe(element));
+      debug("Roll dialog after the click:", describe(element));
     } else {
       debugError("Could not find target button:", buttonLabel);
     }
@@ -146,9 +137,7 @@ async function pressChosenButton(buttonLabel) {
   }
 }
 
-// ============================================================================
-// PHASE B: the dice values from DLA
-// ============================================================================
+// ---- Phase B: the dice values from DLA ----
 
 /**
  * User rolled dice and submitted results in DLA.
@@ -168,18 +157,14 @@ function onDiceResult(rollId, results) {
     return;
   }
 
-  debug("Found resolver element", describe(resolver));
-
   // Find all dice input fields in the resolver
   const allInputs = resolver.querySelectorAll('input[type="text"], input[type="number"], input:not([type])');
-  debug("Found inputs in resolver", allInputs.length, describe(allInputs));
 
   // Inject dice values into the resolver inputs
   let resultIndex = 0;
   for (const input of allInputs) {
     // Skip inputs that already have values or are hidden
     if (input.value || input.type === 'hidden' || getComputedStyle(input).display === 'none') {
-      debug("Skipping input", JSON.stringify({ name: input.name, reason: input.value ? 'has-value' : input.type === 'hidden' ? 'hidden-type' : 'display-none' }));
       continue;
     }
 
@@ -189,17 +174,13 @@ function onDiceResult(rollId, results) {
       input.value = value;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
-      debug("Injected dice value", JSON.stringify({ value, inputName: input.name, inputIndex: resultIndex }));
       resultIndex++;
     }
   }
 
-  debug("Injection complete", JSON.stringify({ injectedCount: resultIndex, totalResults: results.length }));
+  debug("Dice values filled in", JSON.stringify({ filled: resultIndex, sent: results.length, boxes: allInputs.length }));
 
   setTimeout(() => {
-    // Log every button in the resolver so we know exactly what's available
-    debug("Resolver all buttons", describe(resolver.querySelectorAll('button')));
-
     // Look for submit button in resolver
     const submitBtn = resolver.querySelector(
       'button[type="submit"], ' +
@@ -212,8 +193,6 @@ function onDiceResult(rollId, results) {
     // Also check if resolver itself is a form (v14 pattern)
     const resolverIsForm = resolver.tagName === 'FORM';
     const innerForm = resolverIsForm ? null : resolver.querySelector('form');
-
-    debug("Resolver submit search", describe(submitBtn), JSON.stringify({ resolverIsForm, innerFormFound: !!innerForm }));
 
     if (submitBtn) {
       debug("Clicking resolver submit button", submitBtn.textContent?.trim());
@@ -233,7 +212,7 @@ function onDiceResult(rollId, results) {
           debug("Clicking fallback button", anyBtn.textContent?.trim());
           anyBtn.click();
         } else {
-          debug("No submit mechanism found in resolver — roll will not complete");
+          debugError("No way to submit the resolver found - the roll will not complete", describe(resolver.querySelectorAll("button")));
         }
       }
     }
@@ -242,9 +221,7 @@ function onDiceResult(rollId, results) {
   }, 100);
 }
 
-// ============================================================================
-// CANCEL: roll cancelled by the user in DLA
-// ============================================================================
+// ---- A roll cancelled in DLA ----
 
 /**
  * Close the hidden Foundry window and clear the roll in progress
@@ -255,7 +232,7 @@ function onRollCancelled(rollId) {
 
   const dialogRef = getMirroredDialog();
 
-  // Close the hidden Foundry dialog — bypass RollResolver.close() to avoid auto-fill
+  // Close the hidden Foundry dialog - bypass RollResolver.close() to avoid auto-fill
   if (dialogRef?.app) {
     try {
       Roll.defaultImplementation.RESOLVERS.delete(dialogRef.app.roll);
@@ -268,9 +245,7 @@ function onRollCancelled(rollId) {
   clearRollState();
 }
 
-// ============================================================================
-// DICE TRAY ROLL - Uses Foundry's Native System
-// ============================================================================
+// ---- Dice tray rolls ----
 
 /**
  * DLA's dice tray started a roll. Run the formula with Foundry's own Roll.evaluate(); this
@@ -290,7 +265,6 @@ async function onDiceTrayRoll(formula, flavor) {
   } catch (e) {
     debugError("Roll error:", e.message);
     if (e.message?.includes("cancelled")) return;   // cancelled in DLA: nothing to report
-    debug("Error executing dice tray roll:", e);
     ui.notifications?.error(`Dice roll error: ${e.message}`);
   }
 }

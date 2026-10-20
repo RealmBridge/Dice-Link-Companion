@@ -12,7 +12,7 @@ import { emitToPlayers, onPlayerMessage } from "./socket.js";
 import { clipGoesToOthers, clipShownToMe } from "./clip-visibility.js";
 import { currentChatVisibility } from "./chat-log.js";
 
-// ── Camera stream overlay (per-player, positioned) ────────────────────────────
+// ---- Each player's clip on screen ----
 //
 // Each Dice Link player's clip shows in its own fixed spot so multiple rolls don't
 // stack in the centre. Spots fill in priority order (top-left, bottom-left,
@@ -108,14 +108,14 @@ function showDiceStreamFrame(frameB64, playerId) {
 
   try {
     if (frameB64.startsWith('data:')) {
-      // Network frame (WebP data URL from socket) — draw via an Image object.
+      // Network frame (WebP data URL from socket) - draw via an Image object.
       const img = new Image();
       img.onload = () => {
         if (s.canvas.width !== img.naturalWidth || s.canvas.height !== img.naturalHeight) {
           s.canvas.width = img.naturalWidth;
           s.canvas.height = img.naturalHeight;
         }
-        // Clear first — frames are mostly transparent, and drawImage composites, so
+        // Clear first - frames are mostly transparent, and drawImage composites, so
         // without clearing, previous frames bleed through the see-through areas.
         s.ctx.clearRect(0, 0, s.canvas.width, s.canvas.height);
         s.ctx.drawImage(img, 0, 0);
@@ -127,7 +127,7 @@ function showDiceStreamFrame(frameB64, playerId) {
       }
       img.src = frameB64;
     } else {
-      // Local frame (raw RGBA with a 4-byte header from QWebChannel) — putImageData.
+      // Local frame (raw RGBA with a 4-byte header from QWebChannel) - putImageData.
       const binary = atob(frameB64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -156,7 +156,7 @@ function showDiceStreamFrame(frameB64, playerId) {
 }
 
 /**
- * Signal that a player's stream has ended — their clip fades out after a short pause.
+ * Signal that a player's stream has ended - their clip fades out after a short pause.
  * The player keeps their spot (it is freed only on disconnect).
  * @param {string} [playerId]
  */
@@ -206,8 +206,8 @@ function freeDiceStreamSlot(playerId) {
 }
 
 /**
- * Encode the LOCAL player's current clip canvas to a WebP data: URL for broadcast,
- * ASYNCHRONOUSLY (off the main thread, via toBlob) so it doesn't block the roll
+ * Encode this player's own clip canvas to a WebP data: URL for broadcast, in the
+ * background (off the main thread, via toBlob) so it doesn't block the roll
  * result reaching chat. Calls back with the data URL, or null if nothing to send.
  * @param {(dataUrl: string|null) => void} callback
  * @param {number} [quality]
@@ -229,7 +229,7 @@ function encodeSelfStreamWebP(callback, quality = 0.9) {
   }
 }
 
-// ── This player's own clip, from DLA ──────────────────────────────────────────
+// ---- This player's own clip, from DLA ----
 //
 // Who may see it (clip-visibility.js has the rules): the roll's own dialog may pick a
 // "Roll Mode" for that one roll; by the time the clip starts, Foundry has replaced that
@@ -243,7 +243,7 @@ let clipToOthers = true;         // whether this clip goes to the other players 
 
 // Guards a race from the off-thread (async) broadcast encode: the last frame or
 // two can still be encoding when the stream ends, so without this flag they would
-// be emitted AFTER cameraStreamEnd and re-show the tray on other players with no
+// be emitted after cameraStreamEnd and re-show the tray on other players with no
 // further stop to clear it. Setting it on stream-end makes any in-flight straggler
 // frame drop its broadcast, so cameraStreamEnd is always the last message sent.
 let localBroadcastEnded = false;
@@ -270,8 +270,8 @@ export function clearRollClipVisibility() {
  * Called from main.mjs setup.
  */
 export function setupDiceClips() {
-  // Display frame locally and broadcast to all other players via game.socket.
-  // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
+  // Show the frame here, and send it to the other players' screens over Foundry's socket
+  // (DLA only gives the clip to this screen; the socket message is how the others see it).
   onDLAMessage("cameraFrame", (frameB64) => {
     const uid = game.user.id;
     if (!clipActive) {
@@ -282,7 +282,7 @@ export function setupDiceClips() {
       debug("Dice clip visibility", { visibility: clipVisibility || "public", rollerIsGM: game.user.isGM, sentToOthers: clipToOthers });
     }
     localBroadcastEnded = false;
-    // Draw our own clip locally in our spot, then encode for broadcast OFF the main
+    // Draw our own clip locally in our spot, then encode for broadcast away from the main
     // thread (async toBlob) so the roll result isn't held up behind the WebP encode.
     showDiceStreamFrame(frameB64, uid);
     if (!clipToOthers) return;   // Self only, or a DM's private roll: nobody else sees it

@@ -5,10 +5,7 @@
 
 import { ROLE_NAMES } from "./constants.js";
 
-/**
- * Get current manual rolls permissions for each role
- * @returns {Object} Permission state for each role (1-3)
- */
+/** Whether each role (1-3) has Foundry's manual rolls permission, e.g. { 1: true, 2: false, 3: false }. */
 export function getManualRollsPermissions() {
   try {
     const permissions = game.settings.get("core", "permissions") || {};
