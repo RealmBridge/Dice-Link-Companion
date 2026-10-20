@@ -1,26 +1,32 @@
 /**
- * Socket.js - Socket communication and player functions
- * Handles cross-client communication for dice mode changes
+ * socket.js - messages between the players' Foundry screens (Foundry's module socket).
+ * Receives: manual dice requests and switches (for the GM), mode changes, the GM's group
+ * override, other players' dice clips, and session breaks. Also holds the two player
+ * actions that send a message: request manual dice, and switch back to digital.
  */
 
 import { MODULE_ID } from "./constants.js";
 
 import {
-  getPlayerMode,
   setPlayerMode,
   getGlobalOverride,
-  setGlobalOverride,
   getPendingRequests,
   setPendingRequests
 } from "./settings.js";
 
 import { createRequestChatMessage } from "./chat.js";
 import { refreshPanel } from "./dice-panel.js";
-import { applyManualDice, applyDigitalDice } from "./mode-application.js";
-import { setHasRequestedThisSession } from "./state-management.js";
+import { applyManualDice, applyDigitalDice, applyModeForOverride } from "./mode-application.js";
 import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
 import { clipShownToMe } from "./clip-visibility.js";
 import { showBreakOverlay, markPlayerBack, markPlayerAway, endBreak } from "./break-manager.js";
+
+// What each player sees when the GM changes the group override
+const OVERRIDE_NOTICES = {
+  forceAllManual: "GM has forced manual dice for everyone.",
+  forceAllDigital: "GM has forced digital dice for everyone.",
+  individual: "GM has returned to individual control."
+};
 
 // ============================================================================
 // SOCKET LISTENERS
@@ -54,7 +60,6 @@ export function setupSocketListeners() {
     if (data.action === "applyMode" && data.playerId === game.user.id) {
       if (data.mode === "manual") {
         applyManualDice();
-        setHasRequestedThisSession(false);
         ui.notifications.info("Manual dice mode activated!");
       } else {
         applyDigitalDice();
@@ -66,38 +71,19 @@ export function setupSocketListeners() {
       refreshPanel();
     }
 
-    if (data.action === "globalOverride") {
-      if (data.mode === "forceAllManual") {
-        applyManualDice();
-        ui.notifications.info("GM has forced manual dice for everyone.");
-      } else if (data.mode === "forceAllDigital") {
-        applyDigitalDice();
-        ui.notifications.info("GM has forced digital dice for everyone.");
-      } else if (data.mode === "individual") {
-        // Revert to player's own stored mode
-        const myMode = getPlayerMode();
-        if (myMode === "manual") {
-          applyManualDice();
-        } else {
-          applyDigitalDice();
-        }
-        ui.notifications.info("GM has returned to individual control.");
-      }
+    if (data.action === "globalOverride" && OVERRIDE_NOTICES[data.mode]) {
+      applyModeForOverride(data.mode);
+      ui.notifications.info(OVERRIDE_NOTICES[data.mode]);
       refreshPanel();
     }
 
     if (data.action === "revokeMode" && data.playerId === game.user.id) {
       applyDigitalDice();
-      setHasRequestedThisSession(false);
       ui.notifications.warn("GM has revoked your manual dice mode.");
       refreshPanel();
     } else if (data.action === "revokeMode") {
       // Another player's mode was revoked, refresh our panel to see the update
       refreshPanel();
-    }
-
-    if (data.action === "requestDenied" && data.playerId === game.user.id) {
-      setHasRequestedThisSession(false);
     }
 
     if (data.action === "cameraFrame") {
@@ -168,6 +154,5 @@ export function playerSwitchToDigital() {
   });
 
   applyDigitalDice();
-  setHasRequestedThisSession(false);
   ui.notifications.info("Switched to digital dice.");
 }

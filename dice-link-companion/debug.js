@@ -1,7 +1,8 @@
 /**
- * Debug Module - Centralized debugging for Dice Link Companion
- *
- * Toggle DEBUG in constants.js to enable/disable all logging.
+ * debug.js - all of DLC's diagnostics, in one place. Console logging (DLA keeps the
+ * "[Dice Link ...]" lines in its own log), extra checks on Foundry's dice resolver, full
+ * error stack traces, and the Dice So Nice check. Switched on and off by DEBUG in
+ * constants.js.
  */
 
 import { DEBUG } from "./constants.js";
@@ -60,58 +61,13 @@ export function debugFulfillment(...args) {
 }
 
 /**
- * Log HTML cloning operations for mirrored dialogs
- * @param {string} stage - Stage of cloning operation
- * @param {any} data - Associated data (element info, HTML length, etc.)
+ * Log how a roll window is passed to DLA (dialog-mirroring.js)
+ * @param {string} stage - Stage of the operation
+ * @param {any} data - Associated data (element info, etc.)
  */
 export function debugCloning(stage, data) {
   if (DEBUG_ENABLED) {
     console.log("[Dice Link Cloning]", stage, data);
-  }
-}
-
-/**
- * Log button/footer detection attempts and results
- * @param {string} stage - Stage of button detection (e.g., "searching", "found", "not found")
- * @param {any} data - Associated data (selector used, element found, HTML preview, etc.)
- */
-export function debugButtonDetection(stage, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Button Detection]", stage, data);
-  }
-}
-
-/**
- * Log panel content injection and DOM state
- * @param {string} stage - Stage of injection (e.g., "before injection", "after injection", "verification")
- * @param {any} data - Associated data (HTML length, element counts, visibility states, etc.)
- */
-export function debugPanelInjection(stage, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Panel Injection]", stage, data);
-  }
-}
-
-/**
- * Log CSS computed styles for elements to debug visibility issues
- * @param {string} selector - CSS selector or element description
- * @param {HTMLElement} element - Element to inspect
- */
-export function debugComputedStyles(selector, element) {
-  if (DEBUG_ENABLED && element) {
-    const styles = window.getComputedStyle(element);
-    console.log(`[Dice Link CSS Styles] ${selector}`, {
-      display: styles.display,
-      visibility: styles.visibility,
-      opacity: styles.opacity,
-      height: styles.height,
-      width: styles.width,
-      maxHeight: styles.maxHeight,
-      overflow: styles.overflow,
-      position: styles.position,
-      zIndex: styles.zIndex,
-      pointerEvents: styles.pointerEvents
-    });
   }
 }
 
@@ -228,47 +184,13 @@ export function installErrorDiagnostics() {
 }
 
 /**
- * Log element width measurements to debug stretching
- * @param {string} stage - Stage of measurement (e.g., "content area", "panel", "cloned dialog", "nav")
- * @param {HTMLElement} element - Element to measure
- * @param {string} label - Optional label for the element
- */
-export function debugElementDimensions(stage, element, label = "") {
-  if (DEBUG_ENABLED && element) {
-    const rect = element.getBoundingClientRect();
-    const computed = window.getComputedStyle(element);
-    const inlineStyle = element.getAttribute("style") || "(none)";
-
-    console.log(`[Dice Link Dimensions] ${stage} ${label}`, {
-      offsetWidth: element.offsetWidth,
-      offsetHeight: element.offsetHeight,
-      clientWidth: element.clientWidth,
-      clientHeight: element.clientHeight,
-      boundingClientRect: {
-        width: rect.width,
-        height: rect.height
-      },
-      computedStyle: {
-        width: computed.width,
-        height: computed.height,
-        maxWidth: computed.maxWidth,
-        overflow: computed.overflow
-      },
-      inlineStyle: inlineStyle,
-      className: element.className,
-      tagName: element.tagName
-    });
-  }
-}
-
-/**
  * Check whether Dice So Nice suppression is currently working on this client.
  * Reports: whether DSN is active, how many hooks are registered for the pre-process
  * event, and whether firing a test event actually suppresses willTrigger3DRoll.
  *
  * Call from the Foundry CMD prompt: debugDSNStatus()
  */
-export function debugDSNStatus() {
+function debugDSNStatus() {
   if (!DEBUG_ENABLED) return;
   const prefix = "[Dice Link DSN Diag]";
 
@@ -296,24 +218,6 @@ export function debugDSNStatus() {
   // Check that the dice-link fulfillment method is registered with interactive:true
   const diceLink = CONFIG.Dice.fulfillment?.methods?.["dice-link"];
   console.log(prefix, "dice-link method registered:", !!diceLink, "interactive:", diceLink?.interactive);
-}
-
-/**
- * Diagnose why handleStartBreak may not be working.
- * Logs all state relevant to the break pipeline before handleStartBreak is entered.
- */
-export function diagnoseBreakStart() {
-  const prefix = "[Dice Link Break Diag]";
-  console.log(prefix, "game.user exists:", !!game.user);
-  console.log(prefix, "game.user.id:", game.user?.id);
-  console.log(prefix, "game.user.role:", game.user?.role);
-  console.log(prefix, "game.user.isGM:", game.user?.isGM);
-  console.log(prefix, "CONST.USER_ROLES.GAMEMASTER:", CONST?.USER_ROLES?.GAMEMASTER);
-  console.log(prefix, "game.paused:", game.paused);
-  console.log(prefix, "game.socket exists:", !!game.socket);
-  console.log(prefix, "game.users count:", game.users?.size);
-  const existingOverlay = document.getElementById('dlc-break-overlay');
-  console.log(prefix, "existing #dlc-break-overlay in DOM:", !!existingOverlay);
 }
 
 if (DEBUG_ENABLED) {

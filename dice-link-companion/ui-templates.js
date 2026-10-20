@@ -1,14 +1,13 @@
 /**
- * UI Templates Module
- * Extracts all HTML generation functions from main.mjs
- * Pure template functions with no game logic - only rendering
- * Depends on: constants.js, settings.js, settings-helpers.js, state-management.js, video-feed.js
+ * ui-templates.js - the HTML of the DLC panel: the GM panel (settings: permissions, group
+ * override, the GM's own mode; pending requests; player modes) and the player panel
+ * (player modes, request manual dice / switch to digital). Builds HTML only; the buttons
+ * are handled in dice-panel.js.
  */
 
 import {
   REALM_BRIDGE_URL,
   LOGO_URL,
-  LOGO_SQUARE_URL,
   ROLE_NAMES
 } from "./constants.js";
 
@@ -29,7 +28,7 @@ import { getManualRollsPermissions } from "./settings-helpers.js";
 
 /**
  * Generate the complete GM control panel
- * Shows: Permissions, Global Override, Player Modes, Pending Requests, Video Feed, Roll Request
+ * Shows: Settings (Permissions, Override, Your Mode), Pending Requests, Player Modes
  */
 export function generateGMPanelContent() {
   const globalOverride = getGlobalOverride();
@@ -146,7 +145,7 @@ export function generateGMPanelContent() {
       <div class="dlc-bottom-sections">
         ${pendingRequests.length > 0 ? `
           <!-- Pending Requests -->
-          <div class="dlc-section dlc-pending-section">
+          <div class="dlc-section dlc-pending-section ${collapsedSections.pending ? 'collapsed' : ''}">
             <div class="dlc-section-header" data-section="pending">
               <span class="dlc-collapse-btn">${collapsedSections.pending ? '+' : '−'}</span>
               <h3><i class="fas fa-clock"></i> Pending Requests (${pendingRequests.length})</h3>
@@ -215,7 +214,7 @@ export function generateGMPanelContent() {
 
 /**
  * Generate the complete player control panel
- * Shows: Player Modes (with request/switch buttons), Roll Request, Video Feed
+ * Shows: Player Modes (with request/switch buttons)
  */
 export function generatePlayerPanelContent() {
   const globalOverride = getGlobalOverride();
@@ -318,7 +317,3 @@ export function generatePlayerPanelContent() {
   `;
 }
 
-// ============================================================================
-// ============================================================================
-// TEMPLATE EXPORTS
-// ============================================================================

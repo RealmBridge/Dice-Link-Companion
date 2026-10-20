@@ -1,11 +1,15 @@
 /**
- * Dialog Mirroring Module
- * Handles suppressing dnd5e roll dialogs and mirroring them to our panel UI
+ * dialog-mirroring.js - Foundry's roll windows, for a user in manual mode.
+ * With DLA connected: hides each roll window (the roll's options dialog, then Foundry's
+ * dice resolver) and passes DLA what it needs - the roll's buttons and options (stored
+ * as the "mirrored dialog"; main.mjs sends it to DLA), then which dice to roll.
+ * Without DLA: unlocks Foundry's resolver so the player can type their dice values.
  */
 
 import { getPlayerMode, getGlobalOverride } from "./settings.js";
-import { debug, debugError, debugCloning, debugButtonDetection } from "./debug.js";
+import { debug, debugError, debugCloning } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
+import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPendingRollRequest, setDLAPhase } from "./state-management.js";
 
 // Wrapper for sendDiceRequest to use QWebChannel
 function sendDiceRequest(rollId, dice, formula, rollType) {
@@ -17,7 +21,6 @@ function sendDiceRequest(rollId, dice, formula, rollType) {
     rollType: rollType
   });
 }
-import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPendingRollRequest, setDLAPhase } from "./state-management.js";
 
 /**
  * Setup dialog mirroring - hook into ApplicationV2 and Dialog renders
@@ -25,9 +28,9 @@ import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPending
  */
 export function setupDialogMirroring() {
   // Try specific dnd5e roll configuration dialog hooks
-  Hooks.on("renderRollConfigurationDialog", (app, html, data) => {
+  Hooks.on("renderRollConfigurationDialog", (app, html) => {
     debug("[DLC-HOOK] renderRollConfigurationDialog fired", { appName: app?.constructor?.name, appId: app?.id });
-    handleDialogRender(app, html, data);
+    handleDialogRender(app, html);
   });
 
   // Hook to detect when applications close (v14 uses closeApplicationV2)
@@ -46,9 +49,9 @@ export function setupDialogMirroring() {
   });
 
   // Generic hook for any application render - cast wide net
-  Hooks.on("renderApplicationV2", (app, html, data) => {
+  Hooks.on("renderApplicationV2", (app, html) => {
     debug("[DLC-HOOK] renderApplicationV2 fired", { appName: app?.constructor?.name, appId: app?.id, htmlType: html?.constructor?.name });
-    handleDialogRender(app, html, data);
+    handleDialogRender(app, html);
   });
 }
 
@@ -74,7 +77,7 @@ function isUserInManualMode() {
 /**
  * Handle dialog render - check if it's a roll dialog and mirror it
  */
-function handleDialogRender(app, html, data) {
+function handleDialogRender(app, html) {
   const htmlEl = html instanceof jQuery ? html[0] : html;
   debug("[DLC-HTML-DIAG] app=" + (app?.constructor?.name ?? "null") +
     " nodeType=" + (htmlEl?.nodeType ?? "null") +
@@ -124,16 +127,16 @@ function handleDialogRender(app, html, data) {
         elementToHide.style.visibility = "hidden";
         elementToHide.style.pointerEvents = "none";
       }
-      // Mirror the RollResolver to our panel
-      mirrorRollResolverToPanel(app, html, data);
+      // Ask DLA for the dice this resolver needs
+      passRollResolverToDLA(app, html);
       return;
     }
 
-    // IMPORTANT: Clone the HTML BEFORE hiding the element
-    // Otherwise the cloned HTML will inherit our hidden styles
-    mirrorDialogToPanel(app, html, data);
+    // Pass it to DLA before hiding it: once hidden, the second render hook for the same
+    // window is skipped (see the check in passRollDialogToDLA)
+    passRollDialogToDLA(app, html);
 
-    // Hide the native dialog AFTER cloning
+    // Hide the native dialog AFTER passing it on
     // visibility:hidden keeps the app active in Foundry's eyes; display:none triggers auto-close
     if (elementToHide?.style) {
       elementToHide.style.visibility = "hidden";
@@ -220,246 +223,69 @@ function isRollDialog(app) {
 }
 
 /**
- * Extract data from native dialog and mirror to our panel
+ * Pass a roll's options window (e.g. dnd5e's roll configuration dialog) to DLA: store it
+ * with its buttons and options as the "mirrored dialog"; main.mjs's listener then sends
+ * DLA the roll request. The caller hides the window afterwards.
  */
-function mirrorDialogToPanel(app, html, data) {
+function passRollDialogToDLA(app, html) {
   try {
-    debugCloning("Starting mirrorDialogToPanel", { appTitle: app?.title, htmlType: html?.constructor?.name });
-    
-    // Clone the system dialog's HTML element to preserve exact layout and styling
-    let elementToClone;
+    debugCloning("Starting passRollDialogToDLA", { appTitle: app?.title, htmlType: html?.constructor?.name });
+
+    let dialogElement;
     if (html instanceof jQuery) {
-      elementToClone = html[0];
+      dialogElement = html[0];
       debugCloning("HTML is jQuery", { length: html.length });
     } else if (html?.element) {
-      elementToClone = html.element;
+      dialogElement = html.element;
       debugCloning("HTML has .element property", { tagName: html.element?.tagName });
     } else if (html?.nodeType === 1) {
-      elementToClone = html;
+      dialogElement = html;
       debugCloning("HTML is Element (nodeType=1)", { tagName: html.tagName });
     }
-    
-    if (!elementToClone) {
-      debugCloning("ERROR: Could not find element to clone", { html });
+
+    if (!dialogElement) {
+      debugCloning("ERROR: Could not find the dialog element", { html });
       return;
     }
-    
-    debugCloning("Element to clone found", { 
-      tagName: elementToClone.tagName, 
-      className: elementToClone.className,
-      displayStyle: elementToClone.style?.display,
-      innerHTML_length: elementToClone.innerHTML?.length 
-    });
-    
+
     // Log element state so we can see whether the duplicate-call guard is working
     debug("[DLC-DUPLICATE-CHECK] element state when guard runs", {
-      display: elementToClone.style?.display || "(not set)",
-      visibility: elementToClone.style?.visibility || "(not set)",
-      tagName: elementToClone.tagName
+      display: dialogElement.style?.display || "(not set)",
+      visibility: dialogElement.style?.visibility || "(not set)",
+      tagName: dialogElement.tagName
     });
 
     // Skip if element is already hidden - this means we've already processed it
     // The hook fires twice (renderRollConfigurationDialog + renderApplicationV2) and
     // the second time the element has visibility:hidden set by the first processing pass
-    if (elementToClone.style?.visibility === 'hidden') {
-      debugCloning("Skipping clone - element already hidden (duplicate hook call)", {});
+    if (dialogElement.style?.visibility === 'hidden') {
+      debugCloning("Skipping - element already hidden (duplicate hook call)", {});
       return;
     }
-    
-    // Extract the inner content, NOT the outer <dialog> element
-    // We want the .window-content (form and layout) AND the buttons to inject inline
-    const windowContent = elementToClone.querySelector('.window-content');
-    
-    debugButtonDetection("Searching for buttons/footer", { 
-      windowContentFound: !!windowContent,
-      searchArea: "top-level selectors"
-    });
-    
-    // Search for the footer/buttons in multiple locations (different systems place them differently)
-    // dnd5e: buttons may be in form-buttons div inside the form
-    // Other systems: may be in footer, .window-footer, .form-footer, or .dialog-buttons
-    const selectors = [
-      'footer',
-      '.window-footer',
-      '.form-footer',
-      '.form-buttons',
-      '.dialog-buttons',
-      '[data-part="footer"]'
-    ];
-    
-    let windowFooter = null;
-    for (const selector of selectors) {
-      const found = elementToClone.querySelector(selector);
-      if (found) {
-        debugButtonDetection(`Selector matched: ${selector}`, {
-          elementTag: found.tagName,
-          elementClass: found.className,
-          elementHTML: found.outerHTML.substring(0, 300)
-        });
-        windowFooter = found;
-        break;
-      } else {
-        debugButtonDetection(`Selector did not match: ${selector}`, {});
-      }
-    }
-    
-    // Also search within the form for buttons if not found at top level
-    let buttonsInForm = null;
-    if (windowContent && !windowFooter) {
-      debugButtonDetection("Top-level buttons not found, searching within window-content", {});
-      
-      const formSelectors = [
-        '.form-buttons',
-        '.dialog-buttons',
-        '[data-part="footer"]'
-      ];
-      
-      for (const selector of formSelectors) {
-        const found = windowContent.querySelector(selector);
-        if (found) {
-          debugButtonDetection(`Found in form with selector: ${selector}`, {
-            elementTag: found.tagName,
-            elementClass: found.className,
-            elementHTML: found.outerHTML.substring(0, 300)
-          });
-          buttonsInForm = found;
-          break;
-        } else {
-          debugButtonDetection(`Not found in form: ${selector}`, {});
-        }
-      }
-      
-      // If still not found, search for ANY buttons in the form
-      if (!buttonsInForm) {
-        debugButtonDetection("No labeled button container found, searching for plain button elements", {});
-        const plainButtons = windowContent.querySelectorAll('button:not(.close):not(.header-control)');
-        if (plainButtons.length > 0) {
-          debugButtonDetection(`Found ${plainButtons.length} plain button elements`, {
-            buttons: Array.from(plainButtons).map(b => ({ 
-              text: b.textContent.trim(), 
-              class: b.className,
-              dataAction: b.dataset?.action
-            }))
-          });
-        } else {
-          debugButtonDetection("No button elements found at all", {
-            windowContentHTML: windowContent.outerHTML.substring(0, 500)
-          });
-        }
-      }
-    }
-    
-    const footerToUse = windowFooter || buttonsInForm;
-    
-    // Wrap in a div with our identifier class so we can scope CSS overrides later
-    const wrapper = document.createElement('div');
-    wrapper.classList.add('dlc-cloned-system-dialog');
-    
-    // Clone the main window-content
-    if (windowContent) {
-      const windowContentClone = windowContent.cloneNode(true);
-      
-      // Remove any button containers already inside the window-content clone
-      // to prevent duplication when we append footerToUse separately below
-      const buttonSelectorsToStrip = [
-        'nav.dialog-buttons', '.dialog-buttons', '.form-buttons', '.form-footer', 'footer'
-      ];
-      for (const sel of buttonSelectorsToStrip) {
-        const existing = windowContentClone.querySelector(sel);
-        if (existing) {
-          debugButtonDetection(`Stripped duplicate buttons from window-content clone: ${sel}`, {
-            elementClass: existing.className
-          });
-          existing.remove();
-        }
-      }
-      
-      wrapper.appendChild(windowContentClone);
-    } else {
-      // Fallback: clone the whole element if no window-content found
-      wrapper.appendChild(elementToClone.cloneNode(true));
-    }
-    
-    // Append the footer/buttons inside the form so it stays within the dialog's width constraint
-    if (footerToUse) {
-      const footerClone = footerToUse.cloneNode(true);
-      // Remove flexrow class to prevent dnd5e's flex layout from stretching buttons
-      if (footerClone.classList) {
-        footerClone.classList.remove('flexrow');
-        debugButtonDetection("Removed flexrow class from cloned footer", { 
-          newClass: footerClone.className
-        });
-      }
-      // Append inside the form element so buttons are constrained by the form's width
-      const formInWrapper = wrapper.querySelector('form');
-      if (formInWrapper) {
-        formInWrapper.appendChild(footerClone);
-        debugButtonDetection("Footer/buttons appended inside form", { 
-          footerClass: footerClone.className,
-          buttonCount: footerClone.querySelectorAll('button').length
-        });
-      } else {
-        // Fallback: append to wrapper if no form found
-        wrapper.appendChild(footerClone);
-        debugButtonDetection("Footer/buttons appended to wrapper (no form found)", { 
-          footerClass: footerClone.className
-        });
-      }
-      debugButtonDetection("Footer/buttons successfully cloned and appended", { 
-        footerHTML: footerToUse.outerHTML.substring(0, 300),
-        footerClass: footerToUse.className,
-        footerTag: footerToUse.tagName,
-        buttonCount: footerToUse.querySelectorAll('button').length
-      });
-    } else {
-      debugButtonDetection("CRITICAL: No footer/buttons found - searching entire element for buttons", {
-        entireDialogHTML: elementToClone.outerHTML.substring(0, 1000),
-        allButtons: Array.from(elementToClone.querySelectorAll('button:not(.close):not(.header-control)')).map(b => ({
-          text: b.textContent.trim(),
-          class: b.className,
-          parent: b.parentElement?.className
-        }))
-      });
-    }
-    
-    // Replace system dice images with DLC blank dice icons
-    replaceDiceIcons(wrapper);
-    
-    // Convert to HTML string for state serialization
-    const clonedHTMLString = wrapper.outerHTML;
-    
-    debugCloning("Cloned HTML string created", { 
-      length: clonedHTMLString.length,
-      preview: clonedHTMLString.substring(0, 200) + "..."
-    });
-    
-    // Extract form data as backup for data access
+
+    // The window's buttons and options, for DLA
     const formData = extractDialogFormData(app, html);
-    
-    // Store the cloned HTML string and dialog reference in state
-    // The state listener in main.mjs will automatically handle panel updates
+
+    // Store the dialog reference in state; the state listener in main.mjs sends DLA the roll request
     setMirroredDialog({
       app,
       html,
-      clonedHTML: clonedHTMLString,  // Store as HTML string for serialization
-      data: formData,
-      isMirroredDialog: true,
-      timestamp: Date.now()
+      data: formData
     });
-    
-    debugCloning("setMirroredDialog called successfully", { clonedHTMLLength: clonedHTMLString.length });
-    
+
+    debugCloning("setMirroredDialog called successfully", {});
+
   } catch (e) {
     debugError("Error mirroring dialog:", e);
-    debugCloning("ERROR in mirrorDialogToPanel", { error: e.message, stack: e.stack });
+    debugCloning("ERROR in passRollDialogToDLA", { error: e.message, stack: e.stack });
   }
 }
 
 /**
- * Mirror Foundry's RollResolver to our panel
- * Same pattern as dialog mirroring - hide theirs, show ours, submit to theirs
+ * Pass Foundry's dice resolver (the window asking for each die's value) to DLA: send DLA
+ * the dice to roll, then hide the resolver. main.mjs fills in the values DLA sends back.
  */
-function mirrorRollResolverToPanel(app, html, data) {
+function passRollResolverToDLA(app, html) {
   try {
     // Normalize html to a DOM element
     let element;
@@ -474,79 +300,54 @@ function mirrorRollResolverToPanel(app, html, data) {
     }
 
     if (!element) {
-      debug("mirrorRollResolverToPanel: Could not find element");
+      debug("passRollResolverToDLA: Could not find element");
       return;
     }
     
     // Extract dice inputs from Foundry's resolver
     const diceInputs = element.querySelectorAll("input[type='number'], input[data-die]");
-    const diceNeeded = [];
 
-    debug("mirrorRollResolverToPanel: element found", JSON.stringify({
+    debug("passRollResolverToDLA: element found", JSON.stringify({
       tagName: element.tagName,
       id: element.id,
       className: element.className,
       open: element.open
     }));
-    debug("mirrorRollResolverToPanel: all inputs in element", JSON.stringify(Array.from(
+    debug("passRollResolverToDLA: all inputs in element", JSON.stringify(Array.from(
       element.querySelectorAll("input")
     ).map(i => ({ type: i.type, name: i.name, max: i.max, dataDie: i.dataset?.die, placeholder: i.placeholder }))));
-    debug("mirrorRollResolverToPanel: inputs matching selector", diceInputs.length);
+    debug("passRollResolverToDLA: inputs matching selector", diceInputs.length);
 
-    diceInputs.forEach((input, index) => {
-      const faces = parseInt(input.max) || parseInt(input.dataset?.faces) || 20;
-      const name = input.name || input.id || `die-${index}`;
-      diceNeeded.push({
-        type: `d${faces}`,
-        faces: faces,
-        index: index,
-        inputName: name,
-        inputElement: input
-      });
-    });
+    // The die type of each value the resolver asks for, e.g. ["d20", "d6", "d6"]
+    const diceTypes = Array.from(diceInputs, input =>
+      `d${parseInt(input.max) || parseInt(input.dataset?.faces) || 20}`);
 
-    if (diceNeeded.length === 0) {
-      debug("mirrorRollResolverToPanel: No dice inputs found");
+    if (diceTypes.length === 0) {
+      debug("passRollResolverToDLA: No dice inputs found");
       return;
     }
 
-    // Read Phase A values (buttonClicked, dlaRollId) BEFORE overwriting pending roll state
+    // Phase A values (buttonClicked, dlaRollId) from the button DLA chose
     const priorRoll = getPendingRollRequest();
     const rollType = priorRoll?.buttonClicked || "normal";
     const rollId = priorRoll?.dlaRollId || `dlc-${Date.now()}`;
 
-    // Store resolver reference
+    // Store resolver reference (main.mjs fills its inputs when DLA sends the values)
     setMirroredDialog({
       app,
       html,
-      element,
-      isRollResolver: true,
-      diceNeeded,
-      timestamp: Date.now()
+      element
     });
-
-    // Preserve Phase A values alongside resolver state
-    setPendingRollRequest({
-      ...priorRoll,
-      isRollResolver: true,
-      diceNeeded: diceNeeded,
-    });
-
-    // Build dice array for DLA
-    const diceForDLA = diceNeeded.map(d => ({
-      type: d.type,
-      count: 1
-    }));
 
     // Consolidate dice of same type
     const consolidatedDice = [];
     const diceMap = new Map();
-    for (const d of diceForDLA) {
-      if (diceMap.has(d.type)) {
-        diceMap.get(d.type).count++;
+    for (const type of diceTypes) {
+      if (diceMap.has(type)) {
+        diceMap.get(type).count++;
       } else {
-        const entry = { type: d.type, count: 1 };
-        diceMap.set(d.type, entry);
+        const entry = { type, count: 1 };
+        diceMap.set(type, entry);
         consolidatedDice.push(entry);
       }
     }
@@ -565,112 +366,6 @@ function mirrorRollResolverToPanel(app, html, data) {
     
   } catch (e) {
     debugError("Error mirroring RollResolver:", e);
-  }
-}
-
-/**
- * Submit dice values to Foundry's hidden RollResolver
- */
-async function submitToFoundryResolver(values) {
-  const dialogRef = getMirroredDialog();
-  if (!dialogRef || !dialogRef.isRollResolver) {
-    debugError("No mirrored RollResolver to submit to");
-    return;
-  }
-  
-  const { element, diceNeeded, app } = dialogRef;
-  
-  try {
-    // Fill in Foundry's hidden inputs with our values
-    for (let i = 0; i < diceNeeded.length; i++) {
-      const dieInfo = diceNeeded[i];
-      const value = values[i];
-      
-      if (dieInfo.inputElement) {
-        dieInfo.inputElement.value = value;
-        dieInfo.inputElement.dispatchEvent(new Event("change", { bubbles: true }));
-        dieInfo.inputElement.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    }
-    
-    // Programmatic clicks work on visibility:hidden elements — no need to reveal first
-    const submitButton = element.querySelector("button[type='submit'], button[data-action='submit'], .submit-button, button.default");
-    if (submitButton) {
-      submitButton.click();
-    } else {
-      // Try submitting the form directly
-      const form = element.querySelector("form");
-      if (form) {
-        form.requestSubmit();
-      }
-    }
-
-    // Small delay for processing
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Restore hidden state
-    if (element?.style) {
-      element.style.visibility = "hidden";
-      element.style.pointerEvents = "none";
-    }
-    
-    // Clear state
-    setMirroredDialog(null);
-    setPendingRollRequest(null);
-    
-  } catch (e) {
-    debugError("Error submitting to Foundry resolver:", e);
-  }
-}
-
-/**
- * Cancel Foundry's hidden RollResolver without submitting values
- */
-export async function cancelFoundryResolver() {
-  debug("cancelFoundryResolver called");
-  const dialogRef = getMirroredDialog();
-  if (!dialogRef || !dialogRef.isRollResolver) {
-    // No resolver to cancel, just clear state
-    debug("No roll resolver found, clearing state");
-    setMirroredDialog(null);
-    setPendingRollRequest(null);
-    return;
-  }
-  
-  const { element, app } = dialogRef;
-  
-  try {
-    // Try to find and click a cancel/close button in the resolver
-    const cancelButton = element?.querySelector("button[data-action='cancel'], button.cancel, .close-button, button[type='button']:not([type='submit'])");
-    debug("Cancel button found:", !!cancelButton);
-    
-    if (cancelButton) {
-      // Programmatic clicks work on visibility:hidden elements — no need to reveal first
-      debug("Clicking cancel button");
-      cancelButton.click();
-      await new Promise(resolve => setTimeout(resolve, 50));
-    } else if (app?.close) {
-      // Fallback: close the application directly
-      debug("No cancel button, closing app directly");
-      await app.close();
-    }
-
-    // Ensure it's hidden
-    if (element?.style) {
-      element.style.visibility = "hidden";
-      element.style.pointerEvents = "none";
-    }
-    
-    // Clear state
-    debug("Clearing mirrored dialog state");
-    setMirroredDialog(null);
-    setPendingRollRequest(null);
-    
-  } catch (e) {
-    debugError("Error in cancelFoundryResolver:", e);
-    // Still clear state on error
-    setMirroredDialog(null);
-    setPendingRollRequest(null);
   }
 }
 
@@ -759,40 +454,6 @@ function extractDialogFormData(app, html) {
   return data;
 }
 
-
-/**
- * Replace system dice images with DLC blank dice icons
- * @param {HTMLElement} wrapper - The cloned dialog wrapper element
- */
-function replaceDiceIcons(wrapper) {
-  const diceMap = {
-    'd4': 'modules/dice-link-companion/assets/DLC%20Dice/D4/d4-blank.svg',
-    'd6': 'modules/dice-link-companion/assets/DLC%20Dice/D6/d6-blank.svg',
-    'd8': 'modules/dice-link-companion/assets/DLC%20Dice/D8/d8-blank.svg',
-    'd10': 'modules/dice-link-companion/assets/DLC%20Dice/D10/d10-blank.svg',
-    'd12': 'modules/dice-link-companion/assets/DLC%20Dice/D12/d12-blank.svg',
-    'd20': 'modules/dice-link-companion/assets/DLC%20Dice/D20/d20-blank.svg',
-    'd100': 'modules/dice-link-companion/assets/DLC%20Dice/D100/d100-blank.svg'
-  };
-  
-  // Find all images that might be dice icons
-  const images = wrapper.querySelectorAll('img');
-  
-  for (const img of images) {
-    const src = img.getAttribute('src') || '';
-    const alt = (img.getAttribute('alt') || '').toLowerCase();
-    
-    // Check if image source or alt contains dice type
-    for (const [dieType, dlcPath] of Object.entries(diceMap)) {
-      if (src.toLowerCase().includes(dieType) || alt.includes(dieType)) {
-        img.setAttribute('src', dlcPath);
-        // Add a class so we can style it
-        img.classList.add('dlc-dice-icon');
-        break;
-      }
-    }
-  }
-}
 
 /**
  * Extract roll data from a mirrored dialog and format it for sending to DLA.

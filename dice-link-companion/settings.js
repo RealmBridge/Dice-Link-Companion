@@ -1,7 +1,8 @@
 /**
- * Dice Link Companion - Settings Module
- * Handles all game.settings registration and access.
- * Imports from constants.js for single source of truth on defaults.
+ * settings.js - DLC's saved Foundry settings: registering them, and reading and writing
+ * each one - every player's dice mode, the GM's group override, pending manual dice
+ * requests, and which panel sections are collapsed. Also answers "is this user in manual
+ * mode right now?". Defaults come from constants.js.
  */
 
 import { MODULE_ID, SETTING_DEFAULTS, PLAYER_MODES, GLOBAL_OVERRIDE_MODES } from "./constants.js";
@@ -74,7 +75,7 @@ export function registerPlayerModeSetting(userId) {
  * @param {string} key - The setting key
  * @returns {*} The setting value
  */
-export function getSetting(key) {
+function getSetting(key) {
   return game.settings.get(MODULE_ID, key);
 }
 
@@ -83,7 +84,7 @@ export function getSetting(key) {
  * @param {string} key - The setting key
  * @param {*} value - The value to set
  */
-export async function setSetting(key, value) {
+async function setSetting(key, value) {
   return game.settings.set(MODULE_ID, key, value);
 }
 

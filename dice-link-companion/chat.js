@@ -1,6 +1,6 @@
 /**
- * Chat.js - Chat message creation functions
- * Handles creating chat messages for dice mode requests and notifications
+ * chat.js - the chat cards for a player's manual dice request: the GM's card with Approve /
+ * Deny buttons, and the player's "request sent" card. The buttons are handled in approval.js.
  */
 
 // ============================================================================

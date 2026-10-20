@@ -1,32 +1,35 @@
 /**
- * Dice Panel Module - dice-link-companion
- * Handles panel lifecycle (open, close, refresh) and all panel event listeners.
- * This is the primary UI orchestration module.
+ * dice-panel.js - the DLC panel (opened from the D20 button in Foundry's scene controls):
+ * opens it, refreshes it, and handles every button and switch on it, for the GM panel
+ * and the player panel. The panel's HTML comes from ui-templates.js.
  */
 
 import { MODULE_ID, ROLE_NAMES } from "./constants.js";
-import { debug, debugState, debugPanelInjection, debugComputedStyles, debugElementDimensions } from "./debug.js";
+import { debug, debugState } from "./debug.js";
 import {
   getCurrentPanelDialog,
   setCurrentPanelDialog
 } from "./state-management.js";
 import {
   setGlobalOverride,
-  getGlobalOverride,
   setPlayerMode,
-  getPlayerMode,
-  getPendingRequests,
-  setPendingRequests,
   getCollapsedSections,
   setCollapsedSections
 } from "./settings.js";
 import { setManualRollsPermission } from "./settings-helpers.js";
-import { applyManualDice, applyDigitalDice } from "./mode-application.js";
-import { createApprovalChatMessage } from "./approval.js";
+import { applyManualDice, applyDigitalDice, applyModeForOverride } from "./mode-application.js";
+import { approveManualRequest, denyManualRequest } from "./approval.js";
 import { playerRequestManual, playerSwitchToDigital } from "./socket.js";
 import { generateGMPanelContent, generatePlayerPanelContent } from "./ui-templates.js";
 
 debug("dice-panel.js: All imports complete");
+
+// What the GM sees when they change the group override
+const OVERRIDE_NOTICES = {
+  forceAllManual: "Forced all to manual dice.",
+  forceAllDigital: "Forced all to digital dice.",
+  individual: "Set to individual control."
+};
 
 // ============================================================================
 // PANEL MANAGEMENT
@@ -46,66 +49,6 @@ export function refreshPanel() {
     const contentElement = $element.find(".window-content");
     
     contentElement.html(newContent);
-    
-    // After injection, constrain the nav to match the cloned dialog's actual rendered width
-    const clonedDialogEl = contentElement.find(".dlc-cloned-system-dialog")[0];
-    const navEl = contentElement.find(".dlc-cloned-system-dialog nav.dialog-buttons")[0];
-    if (clonedDialogEl && navEl) {
-      const dialogWidth = clonedDialogEl.offsetWidth;
-      if (dialogWidth > 0) {
-        navEl.style.width = `${dialogWidth}px`;
-        navEl.style.maxWidth = `${dialogWidth}px`;
-      }
-    }
-    
-    // Log all element dimensions to diagnose stretching
-    const panelElement = panelDialog.element;
-    const windowContent = panelElement.querySelector(".window-content");
-    const sectionContent = panelElement.querySelector(".dlc-section-content");
-    const clonedDialogCheck = panelElement.querySelector(".dlc-cloned-system-dialog");
-    const nav = panelElement.querySelector("nav.dialog-buttons");
-    
-    debugElementDimensions("panel element", panelElement, "DLC-Panel");
-    debugElementDimensions("window-content", windowContent, ".window-content");
-    debugElementDimensions("section-content", sectionContent, ".dlc-section-content");
-    debugElementDimensions("cloned-dialog", clonedDialogCheck, ".dlc-cloned-system-dialog");
-    debugElementDimensions("nav.dialog-buttons", nav, "nav.dialog-buttons");
-    
-    debugPanelInjection("after injection", {
-      contentHTMLLength: contentElement.html().length,
-      dialogButtonsCount: contentElement.find("nav.dialog-buttons").length,
-      clonedButtonsCount: contentElement.find(".dlc-cloned-system-dialog button").length,
-      clonedDialogVisible: contentElement.find(".dlc-cloned-system-dialog").is(":visible"),
-      dialogButtonsVisible: contentElement.find(".dlc-cloned-system-dialog nav.dialog-buttons").is(":visible"),
-      clonedDialogActualWidth: clonedDialogCheck?.offsetWidth
-    });
-    
-    // Debug computed styles of buttons to see why they're not visible
-    const navButtons = contentElement.find("nav.dialog-buttons")[0];
-    if (navButtons) {
-      debugComputedStyles("nav.dialog-buttons", navButtons);
-      const firstButton = contentElement.find("nav.dialog-buttons button")[0];
-      if (firstButton) {
-        debugComputedStyles("nav.dialog-buttons button", firstButton);
-      }
-      
-      // Check if buttons are inside or outside cloned dialog
-      const clonedDialog = contentElement.find(".dlc-cloned-system-dialog")[0];
-      const isButtonsInsideDialog = clonedDialog && clonedDialog.contains(navButtons);
-      const buttonParent = navButtons.parentElement;
-      
-      debugPanelInjection("button container analysis", {
-        buttonContainerTagName: navButtons.tagName,
-        buttonParentTagName: buttonParent?.tagName,
-        buttonParentClassName: buttonParent?.className,
-        isButtonsInsideClonedDialog: isButtonsInsideDialog,
-        navButtonsClasses: navButtons.className,
-        navButtonsComputedJustify: window.getComputedStyle(navButtons).justifyContent,
-        navButtonsComputedMarginLeft: window.getComputedStyle(navButtons).marginLeft,
-        navButtonsComputedMarginRight: window.getComputedStyle(navButtons).marginRight,
-        navButtonsComputedMaxWidth: window.getComputedStyle(navButtons).maxWidth
-      });
-    }
     
     if (isGM) {
       attachGMPanelListeners($element);
@@ -190,36 +133,16 @@ export function attachGMPanelListeners(html) {
     ui.notifications.info("Panel refreshed.");
   });
 
-  // Global override - All Manual toggle
-  html.find(".dlc-override-manual").change(async function() {
-    const checked = $(this).is(":checked");
-    if (checked) {
-      await setGlobalOverride("forceAllManual");
-      applyManualDice();
-      game.socket.emit(`module.${MODULE_ID}`, { action: "globalOverride", mode: "forceAllManual" });
-      ui.notifications.info("Forced all to manual dice.");
-    } else {
-      await setGlobalOverride("individual");
-      game.socket.emit(`module.${MODULE_ID}`, { action: "globalOverride", mode: "individual" });
-      ui.notifications.info("Set to individual control.");
-    }
-    Hooks.call("diceLink.playerModeChanged");
-    refreshPanel();
-  });
-
-  // Global override - All Digital toggle
-  html.find(".dlc-override-digital").change(async function() {
-    const checked = $(this).is(":checked");
-    if (checked) {
-      await setGlobalOverride("forceAllDigital");
-      applyDigitalDice();
-      game.socket.emit(`module.${MODULE_ID}`, { action: "globalOverride", mode: "forceAllDigital" });
-      ui.notifications.info("Forced all to digital dice.");
-    } else {
-      await setGlobalOverride("individual");
-      game.socket.emit(`module.${MODULE_ID}`, { action: "globalOverride", mode: "individual" });
-      ui.notifications.info("Set to individual control.");
-    }
+  // Group override switches: ticking Manual or Digital forces everyone into it; unticking
+  // returns everyone to their own setting. The GM's own screen is switched here, because
+  // the socket message only reaches the other players.
+  html.find(".dlc-override-manual, .dlc-override-digital").change(async function() {
+    const forced = $(this).hasClass("dlc-override-manual") ? "forceAllManual" : "forceAllDigital";
+    const mode = $(this).is(":checked") ? forced : "individual";
+    await setGlobalOverride(mode);
+    applyModeForOverride(mode);
+    game.socket.emit(`module.${MODULE_ID}`, { action: "globalOverride", mode });
+    ui.notifications.info(OVERRIDE_NOTICES[mode]);
     Hooks.call("diceLink.playerModeChanged");
     refreshPanel();
   });
@@ -242,59 +165,13 @@ export function attachGMPanelListeners(html) {
     refreshPanel();
   });
 
-  // Approve buttons
-  html.find(".dlc-panel-approve").click( async function() {
-    const playerId = $(this).data("player-id");
-    const player = game.users.get(playerId);
-    if (!player) return;
-    
-    await setPlayerMode(playerId, "manual");
-    
-    let pending = getPendingRequests();
-    pending = pending.filter(req => req.playerId !== playerId);
-    await setPendingRequests(pending);
-    
-    // Clear chat buttons for this player across ALL chat messages
-    $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
-      $(this).closest(".dlc-chat-buttons").html('<em>Request approved</em>');
-    });
-
-    game.socket.emit(`module.${MODULE_ID}`, {
-      action: "applyMode",
-      playerId: playerId,
-      mode: "manual"
-    });
-    
-    await createApprovalChatMessage(playerId, player.name, true);
-    ui.notifications.info(`Approved manual dice for ${player.name}.`);
-    Hooks.call("diceLink.playerModeChanged");
-    refreshPanel();
+  // Approve / Deny buttons (approval.js does the work)
+  html.find(".dlc-panel-approve").click(function() {
+    approveManualRequest($(this).data("player-id"));
   });
 
-  // Deny buttons
-  html.find(".dlc-panel-deny").click( async function() {
-    const playerId = $(this).data("player-id");
-    const player = game.users.get(playerId);
-    if (!player) return;
-    
-    let pending = getPendingRequests();
-    pending = pending.filter(req => req.playerId !== playerId);
-    await setPendingRequests(pending);
-
-    // Clear chat buttons for this player across ALL chat messages
-    $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
-      $(this).closest(".dlc-chat-buttons").html('<em>Request denied</em>');
-    });
-    
-    game.socket.emit(`module.${MODULE_ID}`, {
-      action: "requestDenied",
-      playerId: playerId
-    });
-    
-    await createApprovalChatMessage(playerId, player.name, false);
-    ui.notifications.info(`Denied manual dice for ${player.name}.`);
-    Hooks.call("diceLink.playerModeChanged");
-    refreshPanel();
+  html.find(".dlc-panel-deny").click(function() {
+    denyManualRequest($(this).data("player-id"));
   });
 
   // Revoke buttons

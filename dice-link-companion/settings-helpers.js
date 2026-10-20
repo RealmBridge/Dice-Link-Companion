@@ -1,14 +1,13 @@
 /**
- * Settings Helpers Module - dice-link-companion
- * Handles Foundry core permission management for manual rolls.
- * Extracted from main.mjs for cleaner module boundaries.
+ * settings-helpers.js - Foundry's own "manual rolls" permission for each player role (the
+ * GM panel's Permissions switches): reading it, and turning it on or off for a role.
  */
 
 import { ROLE_NAMES } from "./constants.js";
 
 /**
  * Get current manual rolls permissions for each role
- * @returns {Object} Permission state for each role (1-4)
+ * @returns {Object} Permission state for each role (1-3)
  */
 export function getManualRollsPermissions() {
   try {
@@ -17,17 +16,16 @@ export function getManualRollsPermissions() {
     return {
       1: roles.includes(1),
       2: roles.includes(2),
-      3: roles.includes(3),
-      4: true  // GM always has permission
+      3: roles.includes(3)
     };
   } catch (e) {
-    return { 1: false, 2: false, 3: false, 4: true };
+    return { 1: false, 2: false, 3: false };
   }
 }
 
 /**
  * Set manual rolls permission for a specific role
- * @param {number} role - Role ID (1-4)
+ * @param {number} role - Role ID (1-3)
  * @param {boolean} enabled - Whether to enable or disable
  * @returns {Promise<boolean>} Success status
  */

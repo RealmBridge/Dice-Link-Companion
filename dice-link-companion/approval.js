@@ -1,20 +1,70 @@
 /**
- * Approval Module - Handle GM approval/denial of player requests
- * Manages chat buttons and approval workflow
+ * approval.js - the GM's answer to a player's request for manual dice.
+ * Approve and Deny are written here once; the chat card buttons, the DLC panel buttons
+ * and the Approve / Deny buttons in the Dice Link App all call them.
  */
 
 import { MODULE_ID } from "./constants.js";
-import { getPlayerMode, setPlayerMode, getPendingRequests, setPendingRequests } from "./settings.js";
+import { setPlayerMode, getPendingRequests, setPendingRequests } from "./settings.js";
 import { refreshPanel } from "./dice-panel.js";
-import { debugState, debugError } from "./debug.js";
+
+/**
+ * Approve a player's request: they switch to manual dice.
+ * @param {string} playerId
+ */
+export function approveManualRequest(playerId) {
+  return answerManualRequest(playerId, true);
+}
+
+/**
+ * Deny a player's request: they stay on digital dice.
+ * @param {string} playerId
+ */
+export function denyManualRequest(playerId) {
+  return answerManualRequest(playerId, false);
+}
+
+async function answerManualRequest(playerId, approved) {
+  if (!game.user.isGM) {
+    ui.notifications.error(`Only GMs can ${approved ? "approve" : "deny"} requests.`);
+    return;
+  }
+
+  const player = game.users.get(playerId);
+  if (!player) {
+    ui.notifications.error("Player not found.");
+    return;
+  }
+
+  // Remove the buttons from ALL chat messages for this player
+  $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
+    $(this).closest(".dlc-chat-buttons").html(`<em>Request ${approved ? "approved" : "denied"}</em>`);
+  });
+
+  if (approved) await setPlayerMode(playerId, "manual");
+
+  const pending = getPendingRequests().filter(req => req.playerId !== playerId);
+  await setPendingRequests(pending);
+
+  game.socket.emit(`module.${MODULE_ID}`, approved
+    ? { action: "applyMode", playerId, mode: "manual" }
+    : { action: "requestDenied", playerId });
+
+  await createApprovalChatMessage(playerId, player.name, approved);
+  ui.notifications.info(`${approved ? "Approved" : "Denied"} manual dice for ${player.name}.`);
+  Hooks.call("diceLink.playerModeChanged");
+
+  // Refresh the panel to show updated state
+  refreshPanel();
+}
 
 /**
  * Create a chat message showing approval/denial decision
  */
-export async function createApprovalChatMessage(playerId, playerName, approved) {
+async function createApprovalChatMessage(playerId, playerName, approved) {
   const status = approved ? "APPROVED" : "DENIED";
   const color = approved ? "#10b981" : "#ef4444";
-  
+
   const content = `
     <div class="dice-link-result" style="border-left: 4px solid ${color}; padding: 10px;">
       <p><strong>${playerName}</strong>'s request for manual dice has been <strong style="color: ${color};">${status}</strong>.</p>
@@ -32,88 +82,15 @@ export async function createApprovalChatMessage(playerId, playerName, approved) 
  * Called from main.mjs setup
  */
 export function setupChatButtonHandlers() {
-  $(document).on("click", ".dlc-chat-approve", async function(e) {
+  $(document).on("click", ".dlc-chat-approve", function(e) {
     e.preventDefault();
     e.stopPropagation();
-    
-    if (!game.user.isGM) {
-      ui.notifications.error("Only GMs can approve requests.");
-      return;
-    }
-
-    const $btn = $(this);
-    const $container = $btn.closest(".dice-link-request");
-    const playerId = $btn.data("player-id");
-    const player = game.users.get(playerId);
-
-    if (!player) {
-      ui.notifications.error("Player not found.");
-      return;
-    }
-
-    // Remove buttons from ALL chat messages for this player
-    $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
-      $(this).closest(".dlc-chat-buttons").html('<em>Request approved</em>');
-    });
-
-    await setPlayerMode(playerId, "manual");
-    
-    let pending = getPendingRequests();
-    pending = pending.filter(req => req.playerId !== playerId);
-    await setPendingRequests(pending);
-    
-    game.socket.emit(`module.${MODULE_ID}`, {
-      action: "applyMode",
-      playerId: playerId,
-      mode: "manual"
-    });
-    
-    await createApprovalChatMessage(playerId, player.name, true);
-    ui.notifications.info(`Approved manual dice for ${player.name}.`);
-    Hooks.call("diceLink.playerModeChanged");
-    
-    // Refresh the panel to show updated state
-    refreshPanel();
+    approveManualRequest($(this).data("player-id"));
   });
 
-  $(document).on("click", ".dlc-chat-deny", async function(e) {
+  $(document).on("click", ".dlc-chat-deny", function(e) {
     e.preventDefault();
     e.stopPropagation();
-    
-    if (!game.user.isGM) {
-      ui.notifications.error("Only GMs can deny requests.");
-      return;
-    }
-
-    const $btn = $(this);
-    const $container = $btn.closest(".dice-link-request");
-    const playerId = $btn.data("player-id");
-    const player = game.users.get(playerId);
-
-    if (!player) {
-      ui.notifications.error("Player not found.");
-      return;
-    }
-
-    // Remove buttons from ALL chat messages for this player
-    $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
-      $(this).closest(".dlc-chat-buttons").html('<em>Request denied</em>');
-    });
-
-    let pending = getPendingRequests();
-    pending = pending.filter(req => req.playerId !== playerId);
-    await setPendingRequests(pending);
-    
-    game.socket.emit(`module.${MODULE_ID}`, {
-      action: "requestDenied",
-      playerId: playerId
-    });
-    
-    await createApprovalChatMessage(playerId, player.name, false);
-    ui.notifications.info(`Denied manual dice for ${player.name}.`);
-    Hooks.call("diceLink.playerModeChanged");
-    
-    // Refresh the panel to show updated state
-    refreshPanel();
+    denyManualRequest($(this).data("player-id"));
   });
 }

@@ -1,7 +1,9 @@
 /**
- * Dice Link Companion - Foundry VTT v13
- * A player-GM dice mode management system with dialog mirroring.
- * Branded for Realm Bridge - https://realmbridge.co.uk
+ * main.mjs - Dice Link Companion's starting point (Foundry VTT v13-v14), by Realm Bridge.
+ * Registers the settings, adds the D20 button that opens the DLC panel, starts every other
+ * DLC script, connects to the Dice Link App (DLA), and handles what DLA sends back during a
+ * roll: the roll button chosen, the dice values, a cancel, a dice tray roll, the player's
+ * dice clip, a GM break, and the GM's Approve / Deny from DLA's player list.
  */
 
 import {
@@ -9,59 +11,36 @@ import {
   ASYNC_OPERATION_DELAY_MS
 } from "./constants.js";
 
-import { 
+import {
   registerCoreSettings,
   registerPlayerModeSettings,
   registerPlayerModeSetting,
-  getSetting,
-  setSetting,
   getPlayerMode,
-  setPlayerMode,
   getGlobalOverride,
-  setGlobalOverride,
   getPendingRequests,
-  setPendingRequests,
-  isUserInManualMode,
-  getCollapsedSections,
-  setCollapsedSections
+  isUserInManualMode
 } from "./settings.js";
 
-import { 
+import {
   getPendingRollRequest,
-  getHasRequestedThisSession,
-  getCurrentPanelDialog,
-  getPendingDiceEntry,
-  getDiceEntryCancelled,
   getMirroredDialog,
   getDLAPhase,
   setPendingRollRequest,
-  setHasRequestedThisSession,
   setCurrentPanelDialog,
-  setPendingDiceEntry,
-  setDiceEntryCancelled,
   setMirroredDialog,
   setDLAPhase,
-  clearAllState,
-  resetUIState,
-  hasPendingOperations,
   onMirroredDialogChange
 } from "./state-management.js";
 
-import { 
-  createApprovalChatMessage,
-  setupChatButtonHandlers
+import {
+  setupChatButtonHandlers,
+  approveManualRequest,
+  denyManualRequest
 } from "./approval.js";
 
-import {
-  setupSocketListeners,
-  playerRequestManual,
-  playerSwitchToDigital
-} from "./socket.js";
+import { setupSocketListeners } from "./socket.js";
 
-import {
-  applyManualDice,
-  applyDigitalDice
-} from "./mode-application.js";
+import { applyDigitalDice } from "./mode-application.js";
 
 import {
   setupDialogMirroring,
@@ -75,7 +54,6 @@ import {
 
 import {
   debug,
-  debugState,
   debugError,
   patchResolverForDiagnostics,
   installErrorDiagnostics
@@ -95,7 +73,6 @@ import {
 
 import {
   setupDiceFulfillment,
-  setupDSNSuppression,
   ensureDSNEnabled,
   restoreDSN,
   applyDiceLinkFulfillment,
@@ -105,14 +82,7 @@ import {
 } from "./dice-fulfillment.js";
 
 import {
-  getManualRollsPermissions,
-  setManualRollsPermission
-} from "./settings-helpers.js";
-
-import {
   connect as connectToDLA,
-  disconnect as disconnectFromDLA,
-  getConnectionStatus as getDLAConnectionStatus,
   onConnectionChange as onDLAConnectionChange,
   sendMessage as sendMessage_Common,
   setButtonSelectCallback,
@@ -124,7 +94,6 @@ import {
   setCameraStreamEndCallback,
   setStartBreakCallback
 } from "./qwebchannel-client.js";
-
 
 import {
   showDiceStreamFrame,
@@ -178,10 +147,6 @@ function sendRollRequest(data) {
     config: { fields: data.configFields || [] },
     buttons: data.buttons
   });
-}
-
-function sendDiceRequest(data) {
-  sendMessage_Common({ type: "diceRequest", ...data });
 }
 
 function sendPlayerModesUpdate(players, globalOverride, pendingRequests) {
@@ -272,9 +237,6 @@ class DiceLinkCompanionApp extends ApplicationV2 {
   }
 }
 
-// UI Template functions now imported from ui-templates.js
-// Panel functions now imported from dice-panel.js
-
 // Wrapper for openPanel that provides the DiceLinkCompanionApp class
 function openPanel() {
   openPanelBase(DiceLinkCompanionApp);
@@ -301,16 +263,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
 });
 
 // ============================================================================
-// INITIALIZATION
-// ============================================================================
-
-// ============================================================================
-// CUSTOM RESOLVER CLASS (for dialog mirroring approach)
-// ============================================================================
-// MIDI-QOL NOTE
-// midi-qol interception removed - dice fulfillment system handles all rolls automatically
-// Roll interception also removed - dialog mirroring handles all roll dialogs automatically
-// ============================================================================
 // INITIALIZATION HOOKS
 // ============================================================================
 
@@ -335,9 +287,7 @@ Hooks.once("ready", async () => {
     
     // Give settings time to register before hooks fire
     await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));
-    
-    // Collapsed sections are now managed by settings.js - no need to load here
-    
+
     // Setup socket listeners
     setupSocketListeners();
     
@@ -346,7 +296,6 @@ Hooks.once("ready", async () => {
     setupDialogMirroring();
     setupChatLog();
     setupDiceFulfillment();
-    setupDSNSuppression();
     
     // Register state listener for mirrored dialog changes
     onMirroredDialogChange((dialogData) => {
@@ -401,12 +350,6 @@ Hooks.once("ready", async () => {
     });
     
     // ========================================================================
-    // PHASE A: Button Selection from DLA
-    // User clicked a button (Advantage/Normal/Disadvantage) in DLA.
-    // We apply config changes and click the hidden Foundry dialog button.
-    // This triggers Foundry to process and show its dice resolver.
-    // ========================================================================
-    // ========================================================================
     // DICE TRAY ROLL: DLA's dice tray initiated a roll
     // Execute the formula in Foundry - this will trigger the normal flow
     // (Foundry shows resolver -> we mirror -> send diceRequest -> etc)
@@ -419,7 +362,7 @@ Hooks.once("ready", async () => {
         // This triggers the normal fulfillment flow - Foundry will show
         // its resolver, our hooks will hide/mirror it, and we'll send
         // a diceRequest to DLA for the physical dice values
-        await executeDiceTrayRollManually(formula, flavor, null);
+        await executeDiceTrayRollManually(formula, flavor);
       } catch (e) {
         debug("Error executing dice tray roll:", e);
         ui.notifications?.error(`Dice roll error: ${e.message}`);
@@ -449,12 +392,16 @@ Hooks.once("ready", async () => {
       // Clear all pending state
       setMirroredDialog(null);
       setPendingRollRequest(null);
-
-      setDiceEntryCancelled(true);
       setDLAPhase(null);
       refreshPanel();
     });
 
+    // ========================================================================
+    // PHASE A: Button Selection from DLA
+    // User clicked a button (Advantage/Normal/Disadvantage) in DLA.
+    // We apply config changes and click the hidden Foundry dialog button.
+    // This triggers Foundry to process and show its dice resolver.
+    // ========================================================================
     setButtonSelectCallback((rollId, buttonClicked, configChanges) => {
       debug("Phase A: Button selection from DLA", { rollId, buttonClicked, configChanges });
       
@@ -621,8 +568,7 @@ Hooks.once("ready", async () => {
       }, 100);
     });
 
-    // Display frame locally and broadcast to all other players via game.socket.
-    // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
+    // GM break started from DLA's timer (break-manager.js does the work)
     setStartBreakCallback((data) => {
       debug("startBreak received from DLA", data);
       handleStartBreak(data);
@@ -634,6 +580,8 @@ Hooks.once("ready", async () => {
     // further stop to clear it. Setting it on stream-end makes any in-flight straggler
     // frame drop its broadcast, so cameraStreamEnd is always the last message sent.
     let localBroadcastEnded = false;
+    // Display frame locally and broadcast to all other players via game.socket.
+    // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
     setCameraFrameCallback((frameB64) => {
       const uid = game.user.id;
       if (!clipActive) {
@@ -731,24 +679,13 @@ Hooks.once("ready", async () => {
       sendPlayerModes();
     });
 
-    // Handle player mode actions from DLA (GM only actions - approve/deny)
+    // The GM pressed Approve / Deny in DLA's player list: same as the chat card buttons
     if (game.user?.isGM) {
-      setPlayerModeActionCallback(async (action, userId, newMode, globalOverride) => {
-        debug("Player mode action from DLA", { action, userId, newMode, globalOverride });
-        
-        if (action === "approve" && userId) {
-          // GM approved manual dice request - set to manual and remove from pending
-          setPlayerMode(userId, "manual");
-          const pending = getPendingRequests().filter(req => req.playerId !== userId);
-          await setPendingRequests(pending);
-        } else if (action === "deny" && userId) {
-          // GM denied manual dice request - just remove from pending (keep digital)
-          const pending = getPendingRequests().filter(req => req.playerId !== userId);
-          await setPendingRequests(pending);
-        }
-        
-        // Trigger update to refresh DLA
-        Hooks.call("diceLink.playerModeChanged");
+      setPlayerModeActionCallback(({ action, playerId }) => {
+        debug("Player mode action from DLA", { action, playerId });
+        if (!playerId) return;
+        if (action === "approve") approveManualRequest(playerId);
+        else if (action === "deny") denyManualRequest(playerId);
       });
     }
   } catch (error) {
@@ -756,19 +693,3 @@ Hooks.once("ready", async () => {
     debugError("Stack trace:", error.stack);
   }
 });
-
-// ============================================================================
-// PUBLIC API
-// ============================================================================
-
-globalThis.DiceLinkCompanion = {
-  openPanel,
-  applyManual: applyManualDice,
-  applyDigital: applyDigitalDice,
-  requestManual: playerRequestManual,
-  switchToDigital: playerSwitchToDigital,
-  // Dice Link App connection
-  connectToDLA,
-  disconnectFromDLA,
-  getDLAConnectionStatus
-};

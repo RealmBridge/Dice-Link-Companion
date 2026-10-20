@@ -1,5 +1,6 @@
 /**
  * clip-visibility.js - who may see a player's dice clip (owner rules, 2026-10-17).
+ * The rules only; main.mjs (sending) and socket.js (receiving) ask them.
  *
  * The roll's visibility (Foundry v14 "messageMode", or the "Roll Mode" picked in the
  * roll's own dialog) decides who sees the clip:

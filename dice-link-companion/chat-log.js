@@ -1,7 +1,8 @@
 /**
- * Chat Log Module - dice-link-companion
- * Forwards Foundry chat messages to DLA via QWebChannel.
- * Uses Foundry's own CSS — system-agnostic.
+ * chat-log.js - the copy of Foundry's chat shown in DLA. Sends each new chat message to
+ * DLA (and again whenever it changes), plus the page's styles so it looks the same there;
+ * carries out clicks made on a chat card in DLA; posts chat typed in DLA; and keeps
+ * Foundry's and DLA's chat visibility (public / whisper / self / GM) in step.
  */
 
 import { sendMessage, getConnectionStatus, setChatInteractionCallback, setChatCommandCallback, setChatVisibilityCallback } from "./qwebchannel-client.js";
@@ -279,9 +280,8 @@ async function embedFontDataUris(css) {
 /**
  * Collect embedded CSS blocks, custom property values, and body classes
  * from the Foundry page, then send them to DLA so it can replicate Foundry's styling.
- *
- * Foundry's CSS lives in <style> elements (no href). The only <link> stylesheet
- * is DLC's own module CSS, which is irrelevant for chat card rendering.
+ * Sources: the page's <style> elements, its same-origin <link> stylesheets, the files
+ * those <style> elements pull in with @import, and @font-face rules built by scripts.
  */
 async function sendChatSetup() {
   const origin = window.location.origin;

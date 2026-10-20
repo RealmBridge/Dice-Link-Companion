@@ -1,8 +1,9 @@
 /**
- * Dice Fulfillment Module - dice-link-companion
- * Handles dice fulfillment by hiding Foundry's resolver and mirroring to our panel.
- * Uses the same shadow/mirror pattern as dialog mirroring.
- *            Dialog mirroring handles hiding/mirroring the RollResolver UI
+ * dice-fulfillment.js - how Foundry gets its dice values while a user is in manual mode.
+ * Registers "Dice Link Companion" as a Foundry dice fulfillment method and switches it on
+ * or off for every die; stops Dice So Nice animating manual rolls; presses the chosen
+ * button on a hidden roll window; and runs rolls sent from DLA's dice tray.
+ * Hiding Foundry's roll windows is done by dialog-mirroring.js.
  */
 
 import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
@@ -16,19 +17,19 @@ import { getMirroredDialog } from "./state-management.js";
 /**
  * Setup Dice Link as a fulfillment method.
  * We DON'T register a custom resolver - instead we let Foundry use its native
- * RollResolver, and our dialog-mirroring.js hooks hide it and mirror to our panel.
- * This is the same shadow/mirror pattern used for roll dialogs.
+ * RollResolver, and our dialog-mirroring.js hooks hide it and ask DLA for the dice.
+ * This is the same hide-and-pass-on pattern used for roll dialogs.
  */
 export function setupDiceFulfillment() {
   debugResolverState("setup_fulfillment_starting", {});
-  
+
   // Register "dice-link" as an interactive method that uses Foundry's default resolver
-  // Our dialog hooks will hide the resolver and mirror it to our panel
+  // Our dialog hooks will hide the resolver and ask DLA for the dice
   CONFIG.Dice.fulfillment.methods["dice-link"] = {
     label: "Dice Link Companion",
     icon: "fa-dice-d20",
     interactive: true
-    // No custom resolver - we mirror Foundry's default RollResolver instead
+    // No custom resolver - we use Foundry's default RollResolver instead
   };
   
   debugResolverState("setup_fulfillment_complete", { methodRegistered: true });
@@ -41,16 +42,16 @@ export function setupDiceFulfillment() {
 /**
  * Execute a dice tray roll using Foundry's native Roll.evaluate().
  * Foundry will show its RollResolver dialog, which our dialog-mirroring.js
- * will hide and mirror to our panel using the same shadow/mirror pattern.
+ * will hide, asking DLA for the dice.
  */
-export async function executeDiceTrayRollManually(formula, flavorText, html) {
+export async function executeDiceTrayRollManually(formula, flavorText) {
   debugFulfillment("executeDiceTrayRollManually:", formula);
   
   try {
     const roll = new Roll(formula);
     
     // Foundry's evaluate() triggers the fulfillment system
-    // Our dialog hooks hide the RollResolver and mirror it to our panel
+    // Our dialog hooks hide the RollResolver and ask DLA for the dice
     await roll.evaluate();
     
     // Send to chat
@@ -83,7 +84,7 @@ export async function submitMirroredDialog(userChoice) {
     return;
   }
   
-  const { app, html, data: formData } = dialogRef;
+  const { html, data: formData } = dialogRef;
   
   // Normalize html to a DOM element
   let element;
@@ -196,16 +197,12 @@ let _dsnSuppressionHookId = null;
 // Original showForRoll — saved when we intercept it, restored on disconnect.
 let _origShowForRoll = null;
 
-export function setupDSNSuppression() {
-  // No-op — suppression is applied on mode switch.
-}
-
 export function ensureDSNEnabled() {
   if (!game.modules.get("dice-so-nice")?.active) return;
   if (game.dice3d) game.dice3d.messageHookDisabled = false;
 }
 
-export function disableDSN() {
+function disableDSN() {
   if (!game.modules.get("dice-so-nice")?.active) return;
   if (game.dice3d) {
     game.dice3d.messageHookDisabled = true;

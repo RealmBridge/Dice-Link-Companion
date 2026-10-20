@@ -1,7 +1,8 @@
 /**
- * QWebChannel Client for DLC
- * Handles communication with DLA via Qt's QWebChannel signal/slot pattern
- * Replaces WebSocket/WebRTC architecture with Qt embedded browser communication
+ * qwebchannel-client.js - DLC's link to the Dice Link App (DLA). DLA shows Foundry in its
+ * own built-in browser and offers "dlaInterface" through Qt's QWebChannel. This script
+ * finds it, announces DLC, answers DLA's connection checks, passes every message from DLA
+ * to the DLC script that registered for it, and sends DLC's messages to DLA.
  */
 
 import { debugQWebChannel, debugError } from "./debug.js";
@@ -14,11 +15,10 @@ let isConnected = false;
 let dlaInterface = null;
 let connectionChangeCallbacks = [];
 
-// Callback storage (same API as websocket-client.js)
+// Callbacks other DLC scripts register, one per message from DLA
 let buttonSelectCallback = null;
 let diceResultCallback = null;
 let cancelCallback = null;
-let rollResultCallback = null;
 let diceTrayRollCallback = null;
 let playerModeActionCallback = null;
 let cameraFrameCallback = null;
@@ -146,14 +146,6 @@ function setupDLAInterface(dlaIface) {
 
     // Connect signal handlers for all message types
 
-    // Roll results
-    if (dlaInterface.rollResultReady) {
-      dlaInterface.rollResultReady.connect((result) => {
-        debugQWebChannel("Received rollResult signal", {});
-        if (rollResultCallback) rollResultCallback(JSON.parse(result));
-      });
-    }
-
     // Roll cancelled - callback expects: (rollId)
     if (dlaInterface.rollCancelledReady) {
       dlaInterface.rollCancelledReady.connect((data) => {
@@ -162,13 +154,6 @@ function setupDLAInterface(dlaIface) {
         if (cancelCallback) {
           cancelCallback(message.id || message.originalRollId);
         }
-      });
-    }
-
-    // Roll complete
-    if (dlaInterface.rollCompleteReady) {
-      dlaInterface.rollCompleteReady.connect((data) => {
-        debugQWebChannel("Received rollComplete signal", {});
       });
     }
 
@@ -212,10 +197,10 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
-    // Player modes update - callback expects: (data object)
-    if (dlaInterface.playerModesUpdateReady) {
-      dlaInterface.playerModesUpdateReady.connect((data) => {
-        debugQWebChannel("Received playerModesUpdate signal", {});
+    // GM's Approve / Deny from DLA's player list - callback expects: ({ action, playerId })
+    if (dlaInterface.playerModeActionReady) {
+      dlaInterface.playerModeActionReady.connect((data) => {
+        debugQWebChannel("Received playerModeAction signal", {});
         const message = JSON.parse(data);
         if (playerModeActionCallback) {
           playerModeActionCallback(message);
@@ -347,8 +332,8 @@ function notifyConnectionChange(connected) {
 // ============================================================================
 
 /**
- * Send roll request to DLA
- * @param {Object} data - Roll request data
+ * Send a message to DLA; its type decides which DLA receiver gets it
+ * @param {Object} data - The message, with a "type"
  */
 export function sendMessage(data) {
   debugQWebChannel("sendMessage called", { type: data.type, isConnected, hasDlaInterface: !!dlaInterface });
@@ -372,7 +357,7 @@ export function sendMessage(data) {
     } else if (data.type === "playerModesUpdate" && dlaInterface.receivePlayerModesUpdate) {
       debugQWebChannel("Calling receivePlayerModesUpdate...", {});
       dlaInterface.receivePlayerModesUpdate(jsonData);
-    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatDiagnostic" || data.type === "chatRefStyles" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
+    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
       dlaInterface.receiveChatMessage(jsonData);
     } else {
       debugError("Unknown message type or handler not available", {
@@ -388,7 +373,7 @@ export function sendMessage(data) {
 }
 
 // ============================================================================
-// CALLBACK REGISTRATION (same API as websocket-client.js)
+// CALLBACK REGISTRATION
 // ============================================================================
 
 export function setButtonSelectCallback(callback) {
@@ -401,10 +386,6 @@ export function setDiceResultCallback(callback) {
 
 export function setCancelCallback(callback) {
   cancelCallback = callback;
-}
-
-export function setRollResultCallback(callback) {
-  rollResultCallback = callback;
 }
 
 export function setDiceTrayRollCallback(callback) {
@@ -449,11 +430,4 @@ export function onConnectionChange(callback) {
 
 export function getConnectionStatus() {
   return isConnected;
-}
-
-export function disconnect() {
-  isConnected = false;
-  dlaInterface = null;
-  notifyConnectionChange(false);
-  debugQWebChannel("Disconnected from DLA", {});
 }
