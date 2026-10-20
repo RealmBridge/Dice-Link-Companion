@@ -14,7 +14,7 @@ import { setupDiceMethod, applyStartingMode, applyModeForConnection } from "./mo
 import { setupDialogMirroring } from "./dialog-mirroring.js";
 import { setupChatLog, sendInitialChatHistory } from "./chat-log.js";
 import { debug, debugError, installErrorDiagnostics } from "./debug.js";
-import { openPanel, setupPanelMessages, sendPlayerModesToDLA } from "./dice-panel.js";
+import { openPanel, setupPanelMessages, sendPlayerModesToDLA, modesChanged } from "./dice-panel.js";
 import { setupDiceFulfillment } from "./dice-fulfillment.js";
 import { connect as connectToDLA, onConnectionChange as onDLAConnectionChange } from "./qwebchannel-client.js";
 import { setupDiceClips } from "./video-feed.js";
@@ -60,8 +60,12 @@ Hooks.once("ready", async () => {
     // Register per-user settings FIRST - wait for completion
     registerPlayerModeSettings();
     // ...and for any player added later in the session (e.g. joining through a Forge
-    // invite), so the GM can approve them without reloading.
-    Hooks.on("createUser", (user) => registerPlayerModeSetting(user.id));
+    // invite), so the GM can approve them without reloading; they show in the panel and
+    // in DLA's player list straight away.
+    Hooks.on("createUser", (user) => {
+      registerPlayerModeSetting(user.id);
+      modesChanged();
+    });
 
     // Give settings time to register before hooks fire
     await new Promise(resolve => setTimeout(resolve, ASYNC_OPERATION_DELAY_MS));

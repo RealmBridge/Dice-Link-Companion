@@ -15,7 +15,6 @@ import {
   overrideAllowsManualRequest,
   overrideAllowsSwitchToDigital
 } from "./settings.js";
-import { modesChanged, refreshPanel } from "./dice-panel.js";
 import { emitToPlayers, onPlayerMessage } from "./socket.js";
 import { createRequestChatMessage, createApprovalChatMessage } from "./chat.js";
 import { applyMode, applyDigitalDice } from "./mode-application.js";
@@ -106,7 +105,6 @@ async function answerManualRequest(playerId, approved) {
 
   await createApprovalChatMessage(playerId, player.name, approved);
   ui.notifications.info(`${approved ? "Approved" : "Denied"} manual dice for ${player.name}.`);
-  modesChanged();
 }
 
 /**
@@ -124,7 +122,6 @@ export async function revokeManualDice(playerId) {
   emitToPlayers({ action: "revokeMode", playerId });
 
   ui.notifications.info(`Revoked manual dice for ${player.name}.`);
-  modesChanged();
 }
 
 // ============================================================================
@@ -143,38 +140,25 @@ async function receiveManualRequest({ playerId, playerName }) {
 
   await createRequestChatMessage(playerId, playerName);
   ui.notifications.warn(`${playerName} requested manual dice mode.`);
-  modesChanged();
 }
 
-/** A player switched back to digital: the GM's screen saves it; the others show it. */
+/** A player switched back to digital: the GM's screen saves it (players can't save it). */
 async function receiveSwitchToDigital({ playerId }) {
-  if (game.user.isGM) {
-    await setPlayerMode(playerId, PLAYER_MODES.DIGITAL);
-    modesChanged();
-  } else {
-    // Another player switched to digital, refresh our panel to see the update
-    refreshPanel();
-  }
+  if (game.user.isGM) await setPlayerMode(playerId, PLAYER_MODES.DIGITAL);
 }
 
-/** The GM approved this player's request: switch their dice over. The others show it. */
+/** The GM approved this player's request: switch their dice over. */
 function receiveApproval({ playerId, mode }) {
-  if (playerId === game.user.id) {
-    applyMode(mode);
-    ui.notifications.info(mode === PLAYER_MODES.MANUAL ? "Manual dice mode activated!" : "Digital dice mode activated!");
-  }
-  // (another player's mode changed: our panel shows the update too)
-  refreshPanel();
+  if (playerId !== game.user.id) return;
+  applyMode(mode);
+  ui.notifications.info(mode === PLAYER_MODES.MANUAL ? "Manual dice mode activated!" : "Digital dice mode activated!");
 }
 
-/** The GM revoked this player's manual dice: back to digital. The others show it. */
+/** The GM revoked this player's manual dice: back to digital. */
 function receiveRevoke({ playerId }) {
-  if (playerId === game.user.id) {
-    applyDigitalDice();
-    ui.notifications.warn("GM has revoked your manual dice mode.");
-  }
-  // (another player's mode was revoked: our panel shows the update too)
-  refreshPanel();
+  if (playerId !== game.user.id) return;
+  applyDigitalDice();
+  ui.notifications.warn("GM has revoked your manual dice mode.");
 }
 
 // ============================================================================

@@ -13,7 +13,6 @@ import { windowElement } from "./dialog-mirroring.js";
 import { onDLAMessage } from "./qwebchannel-client.js";
 import { normaliseVisibility } from "./clip-visibility.js";
 import { setRollClipVisibility, clearRollClipVisibility } from "./video-feed.js";
-import { refreshPanel } from "./dice-panel.js";
 
 // ============================================================================
 // SETUP
@@ -27,16 +26,6 @@ export function setupDiceFulfillment() {
   onDLAMessage("diceResult", onDiceResult);
   onDLAMessage("rollCancelled", onRollCancelled);
   onDLAMessage("diceTrayRoll", onDiceTrayRoll);
-}
-
-/**
- * A roll is over (done, cancelled, or nothing to fill in): forget it, and redraw the DLC
- * panel. Nothing on the panel is about the roll, but the redraw also brings it up to date
- * with any change to the players' modes that came in since (kept from before the move).
- */
-function endRoll() {
-  clearRollState();
-  refreshPanel();
 }
 
 // ============================================================================
@@ -175,7 +164,7 @@ function onDiceResult(rollId, results) {
 
   if (!resolver) {
     debug("No roll resolver found in DOM for dice injection");
-    endRoll();
+    clearRollState();
     return;
   }
 
@@ -249,7 +238,7 @@ function onDiceResult(rollId, results) {
       }
     }
 
-    endRoll();
+    clearRollState();
   }, 100);
 }
 
@@ -276,7 +265,7 @@ function onRollCancelled(rollId) {
     }
   }
 
-  endRoll();
+  clearRollState();
 }
 
 // ============================================================================

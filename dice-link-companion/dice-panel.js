@@ -159,12 +159,12 @@ export function setupPanelMessages() {
     if (!PLAYER_OVERRIDE_NOTICES[mode]) return;
     applyModeForOverride(mode);
     ui.notifications.info(PLAYER_OVERRIDE_NOTICES[mode]);
-    refreshPanel();
   });
 }
 
 /**
- * Players' modes or requests changed: send DLA the player list and redraw the panel.
+ * Players' modes or requests were saved (settings.js calls this on every screen): send DLA
+ * the player list and redraw the panel.
  */
 export function modesChanged() {
   debug("Player mode changed - resending modes to DLA");
@@ -175,7 +175,7 @@ export function modesChanged() {
 /**
  * Refresh the panel content without recreating the dialog
  */
-export function refreshPanel() {
+function refreshPanel() {
   const panelDialog = getCurrentPanelDialog();
   if (panelDialog && panelDialog.rendered) {
     // ApplicationV2 returns HTMLElement, not jQuery - wrap in jQuery for compatibility
@@ -286,7 +286,6 @@ function attachGMPanelListeners(html) {
     applyModeForOverride(mode);
     emitToPlayers({ action: "globalOverride", mode });
     ui.notifications.info(OVERRIDE_NOTICES[mode]);
-    modesChanged();
   });
 
   // GM mode toggle (switch style)
@@ -297,7 +296,6 @@ function attachGMPanelListeners(html) {
     await setPlayerMode(game.user.id, newMode);
     applyMode(newMode);
     ui.notifications.info(isManual ? "Your dice: Manual" : "Your dice: Digital");
-    modesChanged();
   });
 
   // Approve / Deny / Revoke buttons (approval.js does the work)
@@ -320,16 +318,14 @@ function attachGMPanelListeners(html) {
 function attachPlayerPanelListeners(html) {
   attachSectionToggles(html);
 
-  // Request manual button
-  html.find(".dlc-player-request").click( function() {
+  // Request manual / switch to digital buttons (approval.js does the work; the GM's screen
+  // saves the change, and the panel redraws when that save arrives - settings.js)
+  html.find(".dlc-player-request").click(function() {
     playerRequestManual();
-    refreshPanel();
   });
 
-  // Switch to digital button
-  html.find(".dlc-player-digital").click( function() {
+  html.find(".dlc-player-digital").click(function() {
     playerSwitchToDigital();
-    refreshPanel();
   });
 
 }

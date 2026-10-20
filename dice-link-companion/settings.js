@@ -4,11 +4,18 @@
  * requests, and which panel sections are collapsed. Also holds the two rules every other
  * script asks: which mode a player is really in (their own setting or the GM's group
  * override), and whether their manual dice request is waiting. Defaults come from
- * constants.js.
+ * constants.js. When a player's mode, the group override or the pending requests are
+ * saved, Foundry tells every screen, and each one brings its DLC panel and its own DLA's
+ * player list up to date (onModesSaved).
  */
 
 import { MODULE_ID, SETTING_DEFAULTS, PLAYER_MODES, GLOBAL_OVERRIDE_MODES } from "./constants.js";
 import { debug, debugError } from "./debug.js";
+import { modesChanged } from "./dice-panel.js";
+
+// Foundry calls this on every screen (the one that saved it too) when a player's mode, the
+// group override or the pending requests are saved: the panel and DLA's player list catch up
+const onModesSaved = () => modesChanged();
 
 // The saved setting holding one player's dice mode, and whether it's registered yet
 const playerModeKey = (userId) => `playerMode_${userId}`;
@@ -24,7 +31,8 @@ export function registerCoreSettings() {
     scope: "world",
     config: false,
     type: String,
-    default: SETTING_DEFAULTS.globalOverride
+    default: SETTING_DEFAULTS.globalOverride,
+    onChange: onModesSaved
   });
 
   // Pending approval requests storage
@@ -32,7 +40,8 @@ export function registerCoreSettings() {
     scope: "world",
     config: false,
     type: Array,
-    default: []
+    default: [],
+    onChange: onModesSaved
   });
 
   // UI collapsed sections state - persists across panel refreshes
@@ -68,7 +77,8 @@ export function registerPlayerModeSetting(userId) {
       scope: "world",
       config: false,
       type: String,
-      default: SETTING_DEFAULTS.playerMode
+      default: SETTING_DEFAULTS.playerMode,
+      onChange: onModesSaved
     });
   } catch (e) {
     debugError("Failed to register setting:", `${MODULE_ID}.${key}`, e);
