@@ -1,12 +1,18 @@
 /**
  * settings.js - DLC's saved Foundry settings: registering them, and reading and writing
  * each one - every player's dice mode, the GM's group override, pending manual dice
- * requests, and which panel sections are collapsed. Also answers "is this user in manual
- * mode right now?". Defaults come from constants.js.
+ * requests, and which panel sections are collapsed. Also holds the two rules every other
+ * script asks: which mode a player is really in (their own setting or the GM's group
+ * override), and whether their manual dice request is waiting. Defaults come from
+ * constants.js.
  */
 
 import { MODULE_ID, SETTING_DEFAULTS, PLAYER_MODES, GLOBAL_OVERRIDE_MODES } from "./constants.js";
-import { debugError } from "./debug.js";
+import { debug, debugError } from "./debug.js";
+
+// The saved setting holding one player's dice mode, and whether it's registered yet
+const playerModeKey = (userId) => `playerMode_${userId}`;
+const isPlayerModeRegistered = (userId) => game.settings.settings.has(`${MODULE_ID}.${playerModeKey(userId)}`);
 
 /**
  * Register core settings during the "init" hook.
@@ -55,9 +61,8 @@ export function registerPlayerModeSettings() {
  * @param {string} userId - The user ID
  */
 export function registerPlayerModeSetting(userId) {
-  const key = `playerMode_${userId}`;
-  const fullKey = `${MODULE_ID}.${key}`;
-  if (game.settings.settings.has(fullKey)) return;
+  if (isPlayerModeRegistered(userId)) return;
+  const key = playerModeKey(userId);
   try {
     game.settings.register(MODULE_ID, key, {
       scope: "world",
@@ -66,7 +71,7 @@ export function registerPlayerModeSetting(userId) {
       default: SETTING_DEFAULTS.playerMode
     });
   } catch (e) {
-    debugError("Failed to register setting:", fullKey, e);
+    debugError("Failed to register setting:", `${MODULE_ID}.${key}`, e);
   }
 }
 
@@ -93,14 +98,10 @@ async function setSetting(key, value) {
  * @returns {string} "manual" or "digital"
  */
 export function getPlayerMode(userId = game.user.id) {
-  const key = `playerMode_${userId}`;
-  // Check if setting exists before trying to get it
-  if (!game.settings.settings.has(`${MODULE_ID}.${key}`)) {
-    // Setting not registered yet, return default
-    return SETTING_DEFAULTS.playerMode;
-  }
+  // Setting not registered yet: return the default
+  if (!isPlayerModeRegistered(userId)) return SETTING_DEFAULTS.playerMode;
   try {
-    return getSetting(key) || SETTING_DEFAULTS.playerMode;
+    return getSetting(playerModeKey(userId)) || SETTING_DEFAULTS.playerMode;
   } catch (e) {
     // Fallback if setting somehow fails
     return SETTING_DEFAULTS.playerMode;
@@ -114,7 +115,7 @@ export function getPlayerMode(userId = game.user.id) {
  */
 export async function setPlayerMode(userId, mode) {
   registerPlayerModeSetting(userId);   // a player added since this browser loaded the game
-  return setSetting(`playerMode_${userId}`, mode);
+  return setSetting(playerModeKey(userId), mode);
 }
 
 /**
@@ -175,14 +176,76 @@ export async function setCollapsedSections(sections) {
 }
 
 /**
- * Check if the current user is in manual dice mode.
- * Respects global overrides from the GM.
+ * The mode a player is really in: the GM's group override if one is set, otherwise the
+ * player's own setting. This rule is written here only; every other script asks it.
+ * @param {string} [userId] - defaults to this user
+ * @param {string} [override] - the group override; defaults to the saved one
+ * @returns {string} "manual" or "digital"
+ */
+export function getEffectiveMode(userId = game.user.id, override = getGlobalOverride()) {
+  if (override === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL) return PLAYER_MODES.MANUAL;
+  if (override === GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL) return PLAYER_MODES.DIGITAL;
+  return getPlayerMode(userId);
+}
+
+/**
+ * Whether a player's manual dice request is waiting for the GM. Requests only count while
+ * the GM leaves everyone on their own setting (no group override).
+ * @param {string} userId
+ * @param {string} [override] - the group override; defaults to the saved one
+ * @param {Array} [pending] - the pending requests; defaults to the saved ones
+ * @returns {boolean}
+ */
+function isRequestPending(userId, override = getGlobalOverride(), pending = getPendingRequests()) {
+  return override === GLOBAL_OVERRIDE_MODES.INDIVIDUAL && pending.some(req => req.playerId === userId);
+}
+
+/**
+ * Whether the group override lets a player ask for manual dice (only while there's none).
+ * @param {string} [override] - defaults to the saved one
+ */
+export function overrideAllowsManualRequest(override = getGlobalOverride()) {
+  return override === GLOBAL_OVERRIDE_MODES.INDIVIDUAL;
+}
+
+/**
+ * Whether the group override lets a player switch back to digital (not while the GM
+ * forces everyone to manual).
+ * @param {string} [override] - defaults to the saved one
+ */
+export function overrideAllowsSwitchToDigital(override = getGlobalOverride()) {
+  return override !== GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL;
+}
+
+/**
+ * Every player with the mode they're really in and whether their request is waiting -
+ * what the DLC panel and DLA's player list both show.
+ * @param {string} [override] - the group override; defaults to the saved one
+ * @param {Array} [pending] - the pending requests; defaults to the saved ones
+ * @returns {Array<{id, name, mode, isPending, isGM, isSelf}>}
+ */
+export function getPlayerModes(override = getGlobalOverride(), pending = getPendingRequests()) {
+  return Array.from(game.users, user => ({
+    id: user.id,
+    name: user.name,
+    mode: getEffectiveMode(user.id, override),
+    isPending: isRequestPending(user.id, override, pending),
+    isGM: user.isGM,
+    isSelf: user.id === game.user?.id
+  }));
+}
+
+/**
+ * Check if the current user is in manual dice mode right now.
+ * Defensive: returns false if settings are not ready yet.
  * @returns {boolean} true if user should use manual dice
  */
 export function isUserInManualMode() {
-  const globalOverride = getGlobalOverride();
-  if (globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL) return true;
-  if (globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL) return false;
-  const myMode = getPlayerMode();
-  return myMode === PLAYER_MODES.MANUAL;
+  try {
+    return getEffectiveMode() === PLAYER_MODES.MANUAL;
+  } catch (e) {
+    // Settings not ready yet, default to digital mode
+    debug("isUserInManualMode: settings not ready, defaulting to false");
+    return false;
+  }
 }

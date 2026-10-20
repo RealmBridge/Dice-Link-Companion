@@ -1,31 +1,42 @@
 /**
  * socket.js - messages between the players' Foundry screens (Foundry's module socket).
  * Receives: manual dice requests and switches (for the GM), mode changes, the GM's group
- * override, other players' dice clips, and session breaks. Also holds the two player
- * actions that send a message: request manual dice, and switch back to digital.
+ * override, other players' dice clips, and session breaks. Every DLC script sends its
+ * messages through emitToPlayers here. Also holds the two player actions that send a
+ * message: request manual dice, and switch back to digital.
  */
 
-import { MODULE_ID } from "./constants.js";
+import { MODULE_ID, GLOBAL_OVERRIDE_MODES, PLAYER_MODES } from "./constants.js";
 
 import {
   setPlayerMode,
   getGlobalOverride,
   getPendingRequests,
-  setPendingRequests
+  setPendingRequests,
+  overrideAllowsManualRequest,
+  overrideAllowsSwitchToDigital
 } from "./settings.js";
 
 import { createRequestChatMessage } from "./chat.js";
-import { refreshPanel } from "./dice-panel.js";
-import { applyManualDice, applyDigitalDice, applyModeForOverride } from "./mode-application.js";
+import { refreshPanel, modesChanged } from "./dice-panel.js";
+import { applyDigitalDice, applyMode, applyModeForOverride } from "./mode-application.js";
 import { showDiceStreamFrame, endDiceStream } from "./video-feed.js";
 import { clipShownToMe } from "./clip-visibility.js";
-import { showBreakOverlay, markPlayerBack, markPlayerAway, endBreak } from "./break-manager.js";
+import { showBreakOverlay, markPlayerStatus, endBreak } from "./break-manager.js";
+
+/**
+ * Send a message to the other players' Foundry screens over Foundry's module socket (it
+ * never comes back to this screen). Every DLC script sends its messages through here.
+ */
+export function emitToPlayers(data) {
+  game.socket.emit(`module.${MODULE_ID}`, data);
+}
 
 // What each player sees when the GM changes the group override
 const OVERRIDE_NOTICES = {
-  forceAllManual: "GM has forced manual dice for everyone.",
-  forceAllDigital: "GM has forced digital dice for everyone.",
-  individual: "GM has returned to individual control."
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL]: "GM has forced manual dice for everyone.",
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL]: "GM has forced digital dice for everyone.",
+  [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "GM has returned to individual control."
 };
 
 // ============================================================================
@@ -44,27 +55,20 @@ export function setupSocketListeners() {
 
       await createRequestChatMessage(data.playerId, data.playerName);
       ui.notifications.warn(`${data.playerName} requested manual dice mode.`);
-      Hooks.call("diceLink.playerModeChanged");
-      refreshPanel();
+      modesChanged();
     }
 
     if (game.user.isGM && data.action === "playerSwitchToDigital") {
-      await setPlayerMode(data.playerId, "digital");
-      Hooks.call("diceLink.playerModeChanged");
-      refreshPanel();
+      await setPlayerMode(data.playerId, PLAYER_MODES.DIGITAL);
+      modesChanged();
     } else if (data.action === "playerSwitchToDigital") {
       // Another player switched to digital, refresh our panel to see the update
       refreshPanel();
     }
 
     if (data.action === "applyMode" && data.playerId === game.user.id) {
-      if (data.mode === "manual") {
-        applyManualDice();
-        ui.notifications.info("Manual dice mode activated!");
-      } else {
-        applyDigitalDice();
-        ui.notifications.info("Digital dice mode activated!");
-      }
+      applyMode(data.mode);
+      ui.notifications.info(data.mode === PLAYER_MODES.MANUAL ? "Manual dice mode activated!" : "Digital dice mode activated!");
       refreshPanel();
     } else if (data.action === "applyMode") {
       // Another player's mode changed, refresh our panel to see the update
@@ -101,12 +105,8 @@ export function setupSocketListeners() {
       showBreakOverlay(data.durationMinutes, data.players);
     }
 
-    if (data.action === "breakPlayerBack") {
-      markPlayerBack(data.userId);
-    }
-
-    if (data.action === "breakPlayerAway") {
-      markPlayerAway(data.userId);
+    if (data.action === "breakPlayerBack" || data.action === "breakPlayerAway") {
+      markPlayerStatus(data.userId, data.action === "breakPlayerBack");
     }
 
     if (data.action === "breakEnd") {
@@ -121,17 +121,15 @@ export function setupSocketListeners() {
 
 export function playerRequestManual() {
   const globalOverride = getGlobalOverride();
-  
-  if (globalOverride === "forceAllManual") {
-    ui.notifications.warn("Manual dice is already globally forced by the GM.");
-    return;
-  }
-  if (globalOverride === "forceAllDigital") {
-    ui.notifications.warn("Digital dice is globally forced by the GM. Cannot request manual.");
+
+  if (!overrideAllowsManualRequest(globalOverride)) {
+    ui.notifications.warn(globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL
+      ? "Manual dice is already globally forced by the GM."
+      : "Digital dice is globally forced by the GM. Cannot request manual.");
     return;
   }
 
-  game.socket.emit(`module.${MODULE_ID}`, {
+  emitToPlayers({
     action: "playerRequestManual",
     playerId: game.user.id,
     playerName: game.user.name
@@ -141,14 +139,12 @@ export function playerRequestManual() {
 }
 
 export function playerSwitchToDigital() {
-  const globalOverride = getGlobalOverride();
-  
-  if (globalOverride === "forceAllManual") {
+  if (!overrideAllowsSwitchToDigital()) {
     ui.notifications.warn("Manual dice is globally forced by the GM. Cannot switch to digital.");
     return;
   }
 
-  game.socket.emit(`module.${MODULE_ID}`, {
+  emitToPlayers({
     action: "playerSwitchToDigital",
     playerId: game.user.id
   });

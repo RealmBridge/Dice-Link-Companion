@@ -51,6 +51,18 @@ function _assignSlot(playerId) {
   return 0; // more than 6 players rolling at once (rare): overflow onto the first spot
 }
 
+// Whose clip a frame belongs to: the given player, or this user
+const _whose = (playerId) => playerId || game.user?.id || 'self';
+
+// Take a player's clip off the screen now (and the overlay, once no clip is left)
+function _dropStream(playerId) {
+  const s = _streams.get(playerId);
+  if (!s) return;
+  s.canvas.remove();
+  _streams.delete(playerId);
+  if (_streams.size === 0 && _container) { _container.remove(); _container = null; }
+}
+
 function _getOrCreateStream(playerId) {
   let s = _streams.get(playerId);
   if (s) return s;
@@ -86,7 +98,7 @@ function _startRollingSound() {
  * @param {string} [playerId] - whose clip this is (defaults to the local user)
  */
 export function showDiceStreamFrame(frameB64, playerId) {
-  playerId = playerId || game.user?.id || 'self';
+  playerId = _whose(playerId);
   const s = _getOrCreateStream(playerId);
 
   try {
@@ -144,7 +156,7 @@ export function showDiceStreamFrame(frameB64, playerId) {
  * @param {string} [playerId]
  */
 export function endDiceStream(playerId) {
-  playerId = playerId || game.user?.id || 'self';
+  playerId = _whose(playerId);
   const s = _streams.get(playerId);
   if (!s) return;
 
@@ -171,9 +183,7 @@ function _removeStream(playerId) {
   s.hideTimeout = null;
   s.canvas.style.opacity = '0';
   setTimeout(() => {
-    s.canvas.remove();
-    _streams.delete(playerId);
-    if (_streams.size === 0 && _container) { _container.remove(); _container = null; }
+    if (_streams.get(playerId) === s) _dropStream(playerId);
   }, 500);
 }
 
@@ -186,12 +196,8 @@ export function freeDiceStreamSlot(playerId) {
   const i = _slots.indexOf(playerId);
   if (i !== -1) _slots[i] = null;
   const s = _streams.get(playerId);
-  if (s) {
-    if (s.hideTimeout) clearTimeout(s.hideTimeout);
-    s.canvas.remove();
-    _streams.delete(playerId);
-    if (_streams.size === 0 && _container) { _container.remove(); _container = null; }
-  }
+  if (s?.hideTimeout) clearTimeout(s.hideTimeout);
+  _dropStream(playerId);
 }
 
 /**

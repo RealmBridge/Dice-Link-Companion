@@ -8,19 +8,77 @@
 import {
   REALM_BRIDGE_URL,
   LOGO_URL,
-  ROLE_NAMES
+  ROLE_NAMES,
+  GLOBAL_OVERRIDE_MODES,
+  PLAYER_MODES
 } from "./constants.js";
 
 import {
   getGlobalOverride,
   getPlayerMode,
   getPendingRequests,
-  getCollapsedSections
+  getCollapsedSections,
+  getPlayerModes,
+  overrideAllowsManualRequest,
+  overrideAllowsSwitchToDigital
 } from "./settings.js";
 
 import { getManualRollsPermissions } from "./settings-helpers.js";
 
 
+
+// ============================================================================
+// PIECES BOTH PANELS USE
+// ============================================================================
+
+/** The Realm Bridge logo header at the top of the panel. */
+function headerHTML() {
+  return `
+      <div class="dlc-header">
+        <a href="${REALM_BRIDGE_URL}" target="_blank" class="dlc-logo-link" title="Visit Realm Bridge">
+          <img src="${LOGO_URL}" alt="Realm Bridge" class="dlc-logo" onerror="this.style.display='none'">
+        </a>
+      </div>`;
+}
+
+/**
+ * A panel section that folds: its heading (the +/- button and the title) and its content.
+ * @param {string} section - the key its folded state is saved under (collapsedSections)
+ * @param {string} [extraClass] / [style] - for the top Settings section and Pending Requests
+ */
+function sectionHTML(section, collapsed, icon, title, contentHTML, extraClass = "", style = "") {
+  return `
+        <div class="dlc-section ${extraClass} ${collapsed ? 'collapsed' : ''}"${style ? ` style="${style}"` : ''}>
+          <div class="dlc-section-header" data-section="${section}">
+            <span class="dlc-collapse-btn">${collapsed ? '+' : '−'}</span>
+            <h3><i class="fas ${icon}"></i> ${title}</h3>
+          </div>
+          <div class="dlc-section-content">
+            ${contentHTML}
+          </div>
+        </div>`;
+}
+
+/** A player's mode dot and name (and "(You)" on the player's own card). */
+function playerInfoHTML(player, isYou = false) {
+  return `
+                  <div class="dlc-player-info">
+                    <span class="dlc-mode-dot ${player.isPending ? 'pending' : player.mode}"></span>
+                    <span class="dlc-player-name">${player.name}</span>${isYou ? `
+                    <span class="dlc-self-indicator">(You)</span>` : ''}
+                  </div>`;
+}
+
+/** The colour key under "Player Modes"; the GM's also explains the revoke corner. */
+function modeLegendHTML(withRevoke) {
+  return `
+            <div class="dlc-mode-legend">
+              <span class="dlc-legend-item"><span class="dlc-mode-dot digital"></span>Digital</span>
+              <span class="dlc-legend-item"><span class="dlc-mode-dot manual"></span>Manual</span>
+              <span class="dlc-legend-item"><span class="dlc-mode-dot pending"></span>Pending</span>${withRevoke ? `
+              <span class="dlc-legend-item"><span class="dlc-revoke-dot"></span>Revoke</span>` : ''}
+            </div>`;
+}
 
 // ============================================================================
 // GM PANEL CONTENT
@@ -30,52 +88,25 @@ import { getManualRollsPermissions } from "./settings-helpers.js";
  * Generate the complete GM control panel
  * Shows: Settings (Permissions, Override, Your Mode), Pending Requests, Player Modes
  */
-export function generateGMPanelContent() {
+function generateGMPanelContent() {
   const globalOverride = getGlobalOverride();
   const pendingRequests = getPendingRequests();
   const gmMode = getPlayerMode();
   const rolePermissions = getManualRollsPermissions();
   const collapsedSections = getCollapsedSections();
 
-  const players = [];
-  for (const user of game.users) {
-    // Include all users (including GM) so everyone can see each other's modes
-    const storedMode = getPlayerMode(user.id);
-    const isPending = pendingRequests.some(req => req.playerId === user.id);
-    
-    let effectiveMode = storedMode;
-    if (globalOverride === "forceAllManual") {
-      effectiveMode = "manual";
-    } else if (globalOverride === "forceAllDigital") {
-      effectiveMode = "digital";
-    }
-    
-    players.push({
-      id: user.id,
-      name: user.name,
-      mode: effectiveMode,
-      storedMode: storedMode,
-      isPending: globalOverride === "individual" ? isPending : false,
-      canRevoke: globalOverride === "individual" && storedMode === "manual"
-    });
-  }
+  // All users (including the GM) so everyone can see each other's modes
+  const players = getPlayerModes(globalOverride, pendingRequests).map(player => ({
+    ...player,
+    canRevoke: globalOverride === GLOBAL_OVERRIDE_MODES.INDIVIDUAL && getPlayerMode(player.id) === PLAYER_MODES.MANUAL
+  }));
 
   return `
     <div class="dlc-panel">
-      <!-- Header with Logo -->
-      <div class="dlc-header">
-        <a href="${REALM_BRIDGE_URL}" target="_blank" class="dlc-logo-link" title="Visit Realm Bridge">
-          <img src="${LOGO_URL}" alt="Realm Bridge" class="dlc-logo" onerror="this.style.display='none'">
-        </a>
-      </div>
+      ${headerHTML()}
 
       <!-- Top Row: Permissions | Global Override | GM Mode (Collapsible) -->
-      <div class="dlc-section dlc-top-section ${collapsedSections.topRow ? 'collapsed' : ''}" style="margin: 12px 12px 0 12px;">
-        <div class="dlc-section-header" data-section="topRow">
-          <span class="dlc-collapse-btn">${collapsedSections.topRow ? '+' : '−'}</span>
-          <h3><i class="fas fa-cog"></i> Settings</h3>
-        </div>
-        <div class="dlc-section-content">
+      ${sectionHTML("topRow", collapsedSections.topRow, "fa-cog", "Settings", `
           <div class="dlc-top-row">
         <!-- Permissions -->
         <div class="dlc-mini-section">
@@ -106,14 +137,14 @@ export function generateGMPanelContent() {
           <div class="dlc-role-toggles">
             <div class="dlc-toggle-row">
               <label class="dlc-switch">
-                <input type="checkbox" class="dlc-override-manual" ${globalOverride === 'forceAllManual' ? 'checked' : ''}>
+                <input type="checkbox" class="dlc-override-manual" ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL ? 'checked' : ''}>
                 <span class="dlc-slider"></span>
               </label>
               <span class="dlc-toggle-label">Manual</span>
             </div>
             <div class="dlc-toggle-row">
               <label class="dlc-switch">
-                <input type="checkbox" class="dlc-override-digital" ${globalOverride === 'forceAllDigital' ? 'checked' : ''}>
+                <input type="checkbox" class="dlc-override-digital" ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL ? 'checked' : ''}>
                 <span class="dlc-slider"></span>
               </label>
               <span class="dlc-toggle-label">Digital</span>
@@ -127,30 +158,23 @@ export function generateGMPanelContent() {
           <div class="dlc-role-toggles">
             <div class="dlc-toggle-row">
               <label class="dlc-switch dlc-gm-mode-switch">
-                <input type="checkbox" class="dlc-gm-mode-toggle" ${gmMode === 'manual' ? 'checked' : ''}>
+                <input type="checkbox" class="dlc-gm-mode-toggle" ${gmMode === PLAYER_MODES.MANUAL ? 'checked' : ''}>
                 <span class="dlc-slider"></span>
               </label>
-              <span class="dlc-toggle-label">${gmMode === 'manual' ? 'Manual' : 'Digital'}</span>
+              <span class="dlc-toggle-label">${gmMode === PLAYER_MODES.MANUAL ? 'Manual' : 'Digital'}</span>
             </div>
             <button type="button" class="dlc-refresh-icon-btn dlc-refresh-btn" title="Refresh Panel" style="margin-top: 4px;">
               <i class="fas fa-sync-alt"></i>
             </button>
           </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </div>`, "dlc-top-section", "margin: 12px 12px 0 12px;")}
 
       <!-- Bottom Sections -->
       <div class="dlc-bottom-sections">
         ${pendingRequests.length > 0 ? `
           <!-- Pending Requests -->
-          <div class="dlc-section dlc-pending-section ${collapsedSections.pending ? 'collapsed' : ''}">
-            <div class="dlc-section-header" data-section="pending">
-              <span class="dlc-collapse-btn">${collapsedSections.pending ? '+' : '−'}</span>
-              <h3><i class="fas fa-clock"></i> Pending Requests (${pendingRequests.length})</h3>
-            </div>
-            <div class="dlc-section-content">
+          ${sectionHTML("pending", collapsedSections.pending, "fa-clock", `Pending Requests (${pendingRequests.length})`, `
               <div class="dlc-pending-list">
                 ${pendingRequests.map(req => `
                   <div class="dlc-pending-item">
@@ -165,32 +189,17 @@ export function generateGMPanelContent() {
                     </div>
                   </div>
                 `).join('')}
-              </div>
-            </div>
-          </div>
+              </div>`, "dlc-pending-section")}
         ` : ''}
 
         <!-- Player Modes -->
-        <div class="dlc-section ${collapsedSections.playerModes ? 'collapsed' : ''}">
-          <div class="dlc-section-header" data-section="playerModes">
-            <span class="dlc-collapse-btn">${collapsedSections.playerModes ? '+' : '−'}</span>
-            <h3><i class="fas fa-users"></i> Player Modes</h3>
-          </div>
-          <div class="dlc-section-content">
-            <div class="dlc-mode-legend">
-              <span class="dlc-legend-item"><span class="dlc-mode-dot digital"></span>Digital</span>
-              <span class="dlc-legend-item"><span class="dlc-mode-dot manual"></span>Manual</span>
-              <span class="dlc-legend-item"><span class="dlc-mode-dot pending"></span>Pending</span>
-              <span class="dlc-legend-item"><span class="dlc-revoke-dot"></span>Revoke</span>
-            </div>
+        ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", "Player Modes", `
+            ${modeLegendHTML(true)}
             ${players.length > 0 ? `
               <div class="dlc-players-grid">
                 ${players.map(player => `
                   <div class="dlc-player-card${player.canRevoke ? ' dlc-player-card-revokable' : ''}">
-                    <div class="dlc-player-info">
-                      <span class="dlc-mode-dot ${player.isPending ? 'pending' : player.mode}"></span>
-                      <span class="dlc-player-name">${player.name}</span>
-                    </div>
+                    ${playerInfoHTML(player)}
                     ${player.canRevoke ? `
                       <button type="button" class="dlc-revoke-corner dlc-panel-revoke" data-player-id="${player.id}" title="Revoke manual dice">
                         <i class="fas fa-times"></i>
@@ -199,9 +208,7 @@ export function generateGMPanelContent() {
                   </div>
                 `).join('')}
               </div>
-            ` : '<p class="dlc-no-players">No players connected.</p>'}
-          </div>
-        </div>
+            ` : '<p class="dlc-no-players">No players connected.</p>'}`)}
 
       </div>
     </div>
@@ -216,60 +223,31 @@ export function generateGMPanelContent() {
  * Generate the complete player control panel
  * Shows: Player Modes (with request/switch buttons)
  */
-export function generatePlayerPanelContent() {
+function generatePlayerPanelContent() {
   const globalOverride = getGlobalOverride();
   const pendingRequests = getPendingRequests();
   const myMode = getPlayerMode();
   const myPending = pendingRequests.some(req => req.playerId === game.user.id);
   const collapsedSections = getCollapsedSections();
 
-  const players = [];
-  for (const user of game.users) {
-    // Include all users (including GM) so everyone can see each other's modes
-    const storedMode = getPlayerMode(user.id);
-    const isPendingRaw = pendingRequests.some(req => req.playerId === user.id);
-    let effectiveMode = storedMode;
-    if (globalOverride === "forceAllManual") effectiveMode = "manual";
-    else if (globalOverride === "forceAllDigital") effectiveMode = "digital";
-    const isPending = globalOverride === "individual" ? isPendingRaw : false;
-    players.push({
-      id: user.id,
-      name: user.name,
-      mode: effectiveMode,
-      isPending,
-      isSelf: user.id === game.user.id
-    });
-  }
+  // All users (including the GM) so everyone can see each other's modes
+  const players = getPlayerModes(globalOverride, pendingRequests);
 
-  const canRequest = !myPending && myMode === "digital" && globalOverride === "individual";
-  const canSwitchToDigital = myMode === "manual" && globalOverride !== "forceAllManual";
+  const canRequest = !myPending && myMode === PLAYER_MODES.DIGITAL && overrideAllowsManualRequest(globalOverride);
+  const canSwitchToDigital = myMode === PLAYER_MODES.MANUAL && overrideAllowsSwitchToDigital(globalOverride);
   
   const otherPlayers = players.filter(p => !p.isSelf);
   const selfPlayer = players.find(p => p.isSelf);
 
   return `
     <div class="dlc-panel dlc-player-panel">
-      <!-- Header with Logo -->
-      <div class="dlc-header">
-        <a href="${REALM_BRIDGE_URL}" target="_blank" class="dlc-logo-link" title="Visit Realm Bridge">
-          <img src="${LOGO_URL}" alt="Realm Bridge" class="dlc-logo" onerror="this.style.display='none'">
-        </a>
-      </div>
+      ${headerHTML()}
 
       <!-- Bottom Sections -->
       <div class="dlc-bottom-sections" style="padding-top: 12px;">
         <!-- Player Modes - Two Column Layout -->
-        <div class="dlc-section ${collapsedSections.playerModes ? 'collapsed' : ''}">
-          <div class="dlc-section-header" data-section="playerModes">
-            <span class="dlc-collapse-btn">${collapsedSections.playerModes ? '+' : '−'}</span>
-            <h3><i class="fas fa-users"></i> Player Modes</h3>
-          </div>
-          <div class="dlc-section-content">
-            <div class="dlc-mode-legend">
-              <span class="dlc-legend-item"><span class="dlc-mode-dot digital"></span>Digital</span>
-              <span class="dlc-legend-item"><span class="dlc-mode-dot manual"></span>Manual</span>
-              <span class="dlc-legend-item"><span class="dlc-mode-dot pending"></span>Pending</span>
-            </div>
+        ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", "Player Modes", `
+            ${modeLegendHTML(false)}
             <div class="dlc-players-grid">
               ${canRequest ? `
                 <button type="button" class="dlc-player-card dlc-player-action-card dlc-btn-success dlc-player-request">
@@ -288,32 +266,28 @@ export function generatePlayerPanelContent() {
               ` : ''}
               ${selfPlayer ? `
                 <div class="dlc-player-card dlc-player-card-self">
-                  <div class="dlc-player-info">
-                    <span class="dlc-mode-dot ${selfPlayer.isPending ? 'pending' : selfPlayer.mode}"></span>
-                    <span class="dlc-player-name">${selfPlayer.name}</span>
-                    <span class="dlc-self-indicator">(You)</span>
-                  </div>
+                  ${playerInfoHTML(selfPlayer, true)}
                 </div>
               ` : ''}
               ${otherPlayers.map(player => `
                 <div class="dlc-player-card">
-                  <div class="dlc-player-info">
-                    <span class="dlc-mode-dot ${player.isPending ? 'pending' : player.mode}"></span>
-                    <span class="dlc-player-name">${player.name}</span>
-                  </div>
+                  ${playerInfoHTML(player)}
                 </div>
               `).join('')}
             </div>
-            ${globalOverride !== "individual" ? `
+            ${globalOverride !== GLOBAL_OVERRIDE_MODES.INDIVIDUAL ? `
               <p class="dlc-no-players" style="margin-top: 10px;">
-                <i class="fas fa-lock"></i> GM has set global override: ${globalOverride === "forceAllManual" ? "All Manual" : "All Digital"}
+                <i class="fas fa-lock"></i> GM has set global override: ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL ? "All Manual" : "All Digital"}
               </p>
-            ` : ''}
-          </div>
-        </div>
+            ` : ''}`)}
 
       </div>
     </div>
   `;
+}
+
+/** The GM panel or the player panel. */
+export function generatePanelContent(isGM) {
+  return isGM ? generateGMPanelContent() : generatePlayerPanelContent();
 }
 

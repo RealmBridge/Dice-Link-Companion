@@ -1,8 +1,8 @@
 /**
  * state-management.js - the in-memory state of the roll in progress and the open panel:
  * the pending roll request, Foundry's hidden roll window (the "mirrored dialog"), where
- * the roll is in its exchange with DLA (the DLA phase), and the open DLC panel.
- * Nothing here is saved; saved settings are in settings.js.
+ * the roll is in its exchange with DLA (the DLA phase), and the open DLC panel - and
+ * clearing the roll when it ends. Nothing here is saved; saved settings are in settings.js.
  */
 
 import { debugError } from "./debug.js";
@@ -102,6 +102,16 @@ export function setMirroredDialog(value) {
  */
 export function setDLAPhase(phase) {
   dlaPhase = phase;
+}
+
+/**
+ * Clear the roll in progress: Foundry's hidden roll window, the pending roll request and
+ * the DLA phase. Used when a roll finishes, is cancelled, or its window closes.
+ */
+export function clearRollState() {
+  setMirroredDialog(null);
+  setPendingRollRequest(null);
+  setDLAPhase(null);
 }
 
 // ============================================================================

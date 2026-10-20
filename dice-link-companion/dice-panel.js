@@ -4,7 +4,7 @@
  * and the player panel. The panel's HTML comes from ui-templates.js.
  */
 
-import { MODULE_ID, ROLE_NAMES } from "./constants.js";
+import { ROLE_NAMES, GLOBAL_OVERRIDE_MODES, PLAYER_MODES } from "./constants.js";
 import { debug, debugState } from "./debug.js";
 import {
   getCurrentPanelDialog,
@@ -17,18 +17,18 @@ import {
   setCollapsedSections
 } from "./settings.js";
 import { setManualRollsPermission } from "./settings-helpers.js";
-import { applyManualDice, applyDigitalDice, applyModeForOverride } from "./mode-application.js";
+import { applyMode, applyModeForOverride } from "./mode-application.js";
 import { approveManualRequest, denyManualRequest } from "./approval.js";
-import { playerRequestManual, playerSwitchToDigital } from "./socket.js";
-import { generateGMPanelContent, generatePlayerPanelContent } from "./ui-templates.js";
+import { playerRequestManual, playerSwitchToDigital, emitToPlayers } from "./socket.js";
+import { generatePanelContent } from "./ui-templates.js";
 
 debug("dice-panel.js: All imports complete");
 
 // What the GM sees when they change the group override
 const OVERRIDE_NOTICES = {
-  forceAllManual: "Forced all to manual dice.",
-  forceAllDigital: "Forced all to digital dice.",
-  individual: "Set to individual control."
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL]: "Forced all to manual dice.",
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL]: "Forced all to digital dice.",
+  [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "Set to individual control."
 };
 
 // ============================================================================
@@ -36,25 +36,26 @@ const OVERRIDE_NOTICES = {
 // ============================================================================
 
 /**
+ * Players' modes or requests changed: tell DLA (main.mjs listens for this hook and sends
+ * it the player list) and redraw the panel.
+ */
+export function modesChanged() {
+  Hooks.call("diceLink.playerModeChanged");
+  refreshPanel();
+}
+
+/**
  * Refresh the panel content without recreating the dialog
  */
 export function refreshPanel() {
   const panelDialog = getCurrentPanelDialog();
   if (panelDialog && panelDialog.rendered) {
-    const isGM = panelDialog.isGM;
-    const newContent = isGM ? generateGMPanelContent() : generatePlayerPanelContent();
-    
     // ApplicationV2 returns HTMLElement, not jQuery - wrap in jQuery for compatibility
     const $element = $(panelDialog.element);
     const contentElement = $element.find(".window-content");
-    
-    contentElement.html(newContent);
-    
-    if (isGM) {
-      attachGMPanelListeners($element);
-    } else {
-      attachPlayerPanelListeners($element);
-    }
+
+    contentElement.html(generatePanelContent(panelDialog.isGM));
+    attachPanelListeners($element, panelDialog.isGM);
 
     // Recalculate height only, preserve width to prevent stretching
     const fixedWidth = panelDialog.position?.width || 480;
@@ -101,10 +102,9 @@ export function openPanel(DiceLinkCompanionApp) {
 // ============================================================================
 
 /**
- * Attach all event listeners for the GM panel
+ * Fold / unfold a section when its heading is clicked (both panels), remembering it
  */
-export function attachGMPanelListeners(html) {
-  // Collapse/expand sections
+function attachSectionToggles(html) {
   html.find(".dlc-section-header").click( function() {
     const section = $(this).data("section");
     const currentCollapsed = getCollapsedSections();
@@ -115,6 +115,21 @@ export function attachGMPanelListeners(html) {
       refreshPanel();
     }
   });
+}
+
+/**
+ * Hook up the panel's buttons and switches: the GM panel's or the player panel's
+ */
+export function attachPanelListeners(html, isGM) {
+  if (isGM) attachGMPanelListeners(html);
+  else attachPlayerPanelListeners(html);
+}
+
+/**
+ * Attach all event listeners for the GM panel
+ */
+function attachGMPanelListeners(html) {
+  attachSectionToggles(html);
 
   // Role permission toggles
   html.find(".dlc-role-toggle").change(async function() {
@@ -137,32 +152,25 @@ export function attachGMPanelListeners(html) {
   // returns everyone to their own setting. The GM's own screen is switched here, because
   // the socket message only reaches the other players.
   html.find(".dlc-override-manual, .dlc-override-digital").change(async function() {
-    const forced = $(this).hasClass("dlc-override-manual") ? "forceAllManual" : "forceAllDigital";
-    const mode = $(this).is(":checked") ? forced : "individual";
+    const forced = $(this).hasClass("dlc-override-manual")
+      ? GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL : GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL;
+    const mode = $(this).is(":checked") ? forced : GLOBAL_OVERRIDE_MODES.INDIVIDUAL;
     await setGlobalOverride(mode);
     applyModeForOverride(mode);
-    game.socket.emit(`module.${MODULE_ID}`, { action: "globalOverride", mode });
+    emitToPlayers({ action: "globalOverride", mode });
     ui.notifications.info(OVERRIDE_NOTICES[mode]);
-    Hooks.call("diceLink.playerModeChanged");
-    refreshPanel();
+    modesChanged();
   });
 
   // GM mode toggle (switch style)
   html.find(".dlc-gm-mode-toggle").change(async function() {
     const isManual = $(this).is(":checked");
-    const newMode = isManual ? "manual" : "digital";
-    
+    const newMode = isManual ? PLAYER_MODES.MANUAL : PLAYER_MODES.DIGITAL;
+
     await setPlayerMode(game.user.id, newMode);
-    
-    if (newMode === "manual") {
-      applyManualDice();
-      ui.notifications.info("Your dice: Manual");
-    } else {
-      applyDigitalDice();
-      ui.notifications.info("Your dice: Digital");
-    }
-    Hooks.call("diceLink.playerModeChanged");
-    refreshPanel();
+    applyMode(newMode);
+    ui.notifications.info(isManual ? "Your dice: Manual" : "Your dice: Digital");
+    modesChanged();
   });
 
   // Approve / Deny buttons (approval.js does the work)
@@ -180,16 +188,15 @@ export function attachGMPanelListeners(html) {
     const player = game.users.get(playerId);
     if (!player) return;
     
-    await setPlayerMode(playerId, "digital");
-    
-    game.socket.emit(`module.${MODULE_ID}`, {
+    await setPlayerMode(playerId, PLAYER_MODES.DIGITAL);
+
+    emitToPlayers({
       action: "revokeMode",
       playerId: playerId
     });
-    
+
     ui.notifications.info(`Revoked manual dice for ${player.name}.`);
-    Hooks.call("diceLink.playerModeChanged");
-    refreshPanel();
+    modesChanged();
   });
 
 }
@@ -197,18 +204,8 @@ export function attachGMPanelListeners(html) {
 /**
  * Attach all event listeners for the Player panel
  */
-export function attachPlayerPanelListeners(html) {
-  // Collapse/expand sections
-  html.find(".dlc-section-header").click( function() {
-    const section = $(this).data("section");
-    const currentCollapsed = getCollapsedSections();
-    if (section && currentCollapsed.hasOwnProperty(section)) {
-      currentCollapsed[section] = !currentCollapsed[section];
-      // Save collapsed state to settings
-      setCollapsedSections(currentCollapsed);
-      refreshPanel();
-    }
-  });
+function attachPlayerPanelListeners(html) {
+  attachSectionToggles(html);
 
   // Request manual button
   html.find(".dlc-player-request").click( function() {

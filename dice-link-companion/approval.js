@@ -4,9 +4,11 @@
  * and the Approve / Deny buttons in the Dice Link App all call them.
  */
 
-import { MODULE_ID } from "./constants.js";
+import { PLAYER_MODES } from "./constants.js";
 import { setPlayerMode, getPendingRequests, setPendingRequests } from "./settings.js";
-import { refreshPanel } from "./dice-panel.js";
+import { modesChanged } from "./dice-panel.js";
+import { emitToPlayers } from "./socket.js";
+import { createApprovalChatMessage } from "./chat.js";
 
 /**
  * Approve a player's request: they switch to manual dice.
@@ -41,40 +43,17 @@ async function answerManualRequest(playerId, approved) {
     $(this).closest(".dlc-chat-buttons").html(`<em>Request ${approved ? "approved" : "denied"}</em>`);
   });
 
-  if (approved) await setPlayerMode(playerId, "manual");
+  if (approved) await setPlayerMode(playerId, PLAYER_MODES.MANUAL);
 
   const pending = getPendingRequests().filter(req => req.playerId !== playerId);
   await setPendingRequests(pending);
 
-  game.socket.emit(`module.${MODULE_ID}`, approved
-    ? { action: "applyMode", playerId, mode: "manual" }
-    : { action: "requestDenied", playerId });
+  // Switch the approved player's dice over on their own screen
+  if (approved) emitToPlayers({ action: "applyMode", playerId, mode: PLAYER_MODES.MANUAL });
 
   await createApprovalChatMessage(playerId, player.name, approved);
   ui.notifications.info(`${approved ? "Approved" : "Denied"} manual dice for ${player.name}.`);
-  Hooks.call("diceLink.playerModeChanged");
-
-  // Refresh the panel to show updated state
-  refreshPanel();
-}
-
-/**
- * Create a chat message showing approval/denial decision
- */
-async function createApprovalChatMessage(playerId, playerName, approved) {
-  const status = approved ? "APPROVED" : "DENIED";
-  const color = approved ? "#10b981" : "#ef4444";
-
-  const content = `
-    <div class="dice-link-result" style="border-left: 4px solid ${color}; padding: 10px;">
-      <p><strong>${playerName}</strong>'s request for manual dice has been <strong style="color: ${color};">${status}</strong>.</p>
-    </div>
-  `;
-
-  await ChatMessage.create({
-    content,
-    whisper: [playerId, ...game.users.filter(u => u.isGM).map(u => u.id)]
-  });
+  modesChanged();
 }
 
 /**

@@ -7,8 +7,9 @@
  */
 
 import { ASYNC_OPERATION_DELAY_MS } from "./constants.js";
-import { debug, debugResolverState, debugFulfillment, debugError } from "./debug.js";
+import { debug, debugResolverState, debugFulfillment, debugError, describeButtons } from "./debug.js";
 import { getMirroredDialog } from "./state-management.js";
+import { windowElement } from "./dialog-mirroring.js";
 
 // ============================================================================
 // DICE FULFILLMENT SETUP
@@ -75,7 +76,8 @@ export async function executeDiceTrayRollManually(formula, flavorText) {
 // ============================================================================
 
 /**
- * Apply user choices to the mirrored dialog and submit it
+ * Press the button DLA chose on the hidden roll dialog (main.mjs applies DLA's option
+ * changes to the dialog first)
  */
 export async function submitMirroredDialog(userChoice) {
   const dialogRef = getMirroredDialog();
@@ -86,18 +88,8 @@ export async function submitMirroredDialog(userChoice) {
   
   const { html, data: formData } = dialogRef;
   
-  // Normalize html to a DOM element
-  let element;
-  if (html instanceof jQuery) {
-    element = html[0];
-  } else if (html?.element) {
-    element = html.element;
-  } else if (html?.nodeType === 1) {
-    element = html;
-  } else {
-    element = formData.element;
-  }
-  
+  const element = windowElement(html) || formData?.element;
+    
   if (!element) {
     debugError("Could not find dialog element to submit");
     return;
@@ -110,31 +102,10 @@ export async function submitMirroredDialog(userChoice) {
     open: element?.open,
     id: element?.id
   }));
-  debug("submitMirroredDialog: all buttons in formData", JSON.stringify((formData?.buttons || []).map(b => ({
-    label: b.label,
-    action: b.action,
-    tagName: b.element?.tagName,
-    type: b.element?.type
-  }))));
+  debug("submitMirroredDialog: all buttons in formData", describeButtons(formData?.buttons));
   debug("submitMirroredDialog: looking for button label", userChoice.buttonLabel);
 
   try {
-    // Apply user choices to form inputs in the hidden dialog
-    if (userChoice.formValues) {
-      for (const [name, value] of Object.entries(userChoice.formValues)) {
-        const input = element.querySelector(`input[name="${name}"], select[name="${name}"], textarea[name="${name}"]`);
-        if (input) {
-          if (input.type === "checkbox") {
-            input.checked = value;
-          } else {
-            input.value = value;
-          }
-          // Trigger change event for form validation
-          input.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-      }
-    }
-    
     // Find the button that matches the user's choice
     // userChoice.buttonLabel contains the label they clicked (e.g., "Advantage", "Normal", "Disadvantage")
     let targetButton = null;
@@ -190,6 +161,9 @@ export async function submitMirroredDialog(userChoice) {
 // DSN SUPPRESSION
 // ============================================================================
 
+// Whether the Dice So Nice module is switched on in this world
+const dsnActive = () => !!game.modules.get("dice-so-nice")?.active;
+
 // Saved fulfillment defaultMethod — captured before DLC overwrites it, restored on disconnect.
 let _savedDefaultMethod = null;
 // Hook ID for the explicit DSN suppression hook — null when not registered.
@@ -197,13 +171,8 @@ let _dsnSuppressionHookId = null;
 // Original showForRoll — saved when we intercept it, restored on disconnect.
 let _origShowForRoll = null;
 
-export function ensureDSNEnabled() {
-  if (!game.modules.get("dice-so-nice")?.active) return;
-  if (game.dice3d) game.dice3d.messageHookDisabled = false;
-}
-
 function disableDSN() {
-  if (!game.modules.get("dice-so-nice")?.active) return;
+  if (!dsnActive()) return;
   if (game.dice3d) {
     game.dice3d.messageHookDisabled = true;
     if (_origShowForRoll === null) {
@@ -222,7 +191,7 @@ function disableDSN() {
 }
 
 export function restoreDSN() {
-  if (!game.modules.get("dice-so-nice")?.active) return;
+  if (!dsnActive()) return;
   if (game.dice3d) {
     game.dice3d.messageHookDisabled = false;
     if (_origShowForRoll !== null) {
@@ -240,6 +209,11 @@ export function restoreDSN() {
 // FULFILLMENT MODE APPLICATION
 // ============================================================================
 
+/** Foundry's die types (d4, d6, ... d100) - the dice Dice Link fills in. */
+function dieTerms() {
+  return Object.keys(CONFIG.Dice.terms).filter(term => /^d\d+$/.test(term) && CONFIG.Dice.terms[term]);
+}
+
 /**
  * Apply Dice Link fulfillment to all dice for manual mode users.
  * Called when user is set to manual mode.
@@ -251,10 +225,7 @@ export function applyDiceLinkFulfillment() {
     _savedDefaultMethod = CONFIG.Dice.fulfillment.defaultMethod ?? "";
   }
 
-  const diceTypes = Object.keys(CONFIG.Dice.terms).filter(term => {
-    return /^d\d+$/.test(term) && CONFIG.Dice.terms[term];
-  });
-
+  const diceTypes = dieTerms();
   for (const die of diceTypes) {
     CONFIG.Dice.fulfillment.dice[die] = "dice-link";
   }
@@ -269,10 +240,7 @@ export function applyDiceLinkFulfillment() {
  * Called when user switches to digital mode.
  */
 export function removeDiceLinkFulfillment() {
-  const diceTypes = Object.keys(CONFIG.Dice.terms).filter(term => {
-    return /^d\d+$/.test(term) && CONFIG.Dice.terms[term];
-  });
-
+  const diceTypes = dieTerms();
   for (const die of diceTypes) {
     delete CONFIG.Dice.fulfillment.dice[die];
   }

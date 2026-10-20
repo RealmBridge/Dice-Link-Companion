@@ -9,23 +9,38 @@ import { DEBUG } from "./constants.js";
 const DEBUG_ENABLED = DEBUG;
 
 /**
- * Log a debug message with [Dice Link Debug] prefix
- * @param {...any} args - Arguments to log
+ * Make a console logger with its own "[Dice Link ...]" label (DLA keeps lines with that
+ * label in its log). Silent when DEBUG is off.
+ * @param {string} label - e.g. "[Dice Link Camera]"
+ * @param {string} [method] - the console method: "log" or "error"
  */
-export function debug(...args) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Debug]", ...args);
-  }
+function logger(label, method = "log") {
+  return (...args) => {
+    if (DEBUG_ENABLED) console[method](label, ...args);
+  };
 }
 
+export const debug = logger("[Dice Link Debug]");
+export const debugError = logger("[Dice Link Debug]", "error");
+export const debugResolverState = logger("[Dice Link Resolver State]");  // Foundry's dice resolver
+export const debugFulfillment = logger("[Dice Link Fulfillment]");       // dice tray rolls
+export const debugRollWindow = logger("[Dice Link Roll Window]");        // roll windows passed to DLA
+export const debugQWebChannel = logger("[Dice Link QWebChannel]");       // the link to DLA
+export const debugCamera = logger("[Dice Link Camera]");                 // dice clips
+export const debugChatLog = logger("[Dice Link Chat Log]");              // the chat copy in DLA
+
 /**
- * Log a debug error
- * @param {...any} args - Arguments to log
+ * A roll window's buttons, summarised for the log (label, action, tag, type)
+ * @param {Array} buttons - the buttons read from the window (dialog-mirroring.js)
+ * @returns {string} JSON
  */
-export function debugError(...args) {
-  if (DEBUG_ENABLED) {
-    console.error("[Dice Link Debug]", ...args);
-  }
+export function describeButtons(buttons) {
+  return JSON.stringify((buttons || []).map(b => ({
+    label: b.label,
+    action: b.action,
+    tagName: b.element?.tagName,
+    type: b.element?.type
+  })));
 }
 
 /**
@@ -34,78 +49,7 @@ export function debugError(...args) {
  * @param {any} value - Value to log
  */
 export function debugState(label, value) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Debug]", label + ":", value);
-  }
-}
-
-/**
- * Log resolver state changes
- * @param {string} event - Event type (e.g., "created", "fulfillable", "submitted", "cancelled")
- * @param {any} data - Associated data
- */
-export function debugResolverState(event, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Resolver State]", event, data);
-  }
-}
-
-/**
- * Log fulfillment-specific debug information
- * @param {...any} args - Arguments to log
- */
-export function debugFulfillment(...args) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Fulfillment]", ...args);
-  }
-}
-
-/**
- * Log how a roll window is passed to DLA (dialog-mirroring.js)
- * @param {string} stage - Stage of the operation
- * @param {any} data - Associated data (element info, etc.)
- */
-export function debugCloning(stage, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Cloning]", stage, data);
-  }
-}
-
-/**
- * Log QWebChannel client events for DLA embedded browser communication
- * @param {string} event - Event type (e.g., "connecting", "connected", "signal", "error")
- * @param {any} data - Associated data
- */
-export function debugQWebChannel(event, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link QWebChannel]", event, data);
-  }
-}
-
-/**
- * Log camera stream events (stream start/end, frame decode errors, FPS)
- * @param {string} event - Event type (e.g., "stream-start", "stream-end", "decode-error")
- * @param {any} data - Associated data
- */
-export function debugCamera(event, data) {
-  if (DEBUG_ENABLED) {
-    console.log("[Dice Link Camera]", event, data);
-  }
-}
-
-/**
- * Log chat log events — stylesheet collection, CSS rewriting, message collection, hook firing
- * @param {string} event - Short label for what is happening
- * @param {any} data - Associated data (counts, URLs, flags, etc.)
- */
-export function debugChatLog(event, data) {
-  if (DEBUG_ENABLED) {
-    if (data !== undefined) {
-      console.log("[Dice Link Chat Log]", event, data);
-    } else {
-      console.log("[Dice Link Chat Log]", event);
-    }
-  }
+  debug(label + ":", value);
 }
 
 /**

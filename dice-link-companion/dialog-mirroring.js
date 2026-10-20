@@ -6,10 +6,40 @@
  * Without DLA: unlocks Foundry's resolver so the player can type their dice values.
  */
 
-import { getPlayerMode, getGlobalOverride } from "./settings.js";
-import { debug, debugError, debugCloning } from "./debug.js";
+import { isUserInManualMode } from "./settings.js";
+import { debug, debugError, debugRollWindow, describeButtons } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
-import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setPendingRollRequest, setDLAPhase } from "./state-management.js";
+import { getMirroredDialog, setMirroredDialog, getPendingRollRequest, setDLAPhase, clearRollState } from "./state-management.js";
+
+/**
+ * The page element of a window Foundry hands to a render hook. Foundry 13-14 hand the
+ * element itself; older code paths handed a jQuery object or an object holding .element.
+ * Every one of those cases is kept. Returns null if none fits.
+ */
+export function windowElement(html) {
+  if (html instanceof jQuery) return html[0];
+  if (html?.element) return html.element;
+  if (html?.nodeType === 1) return html;
+  return null;
+}
+
+/** Whether a roll window is Foundry's dice resolver (the window asking for each die's value). */
+function isResolverWindow(app) {
+  const title = (app.title || "").toLowerCase();
+  return title.includes("roll resolution") || title.includes("resolver") ||
+    app.constructor?.name?.toLowerCase().includes("rollresolver");
+}
+
+/**
+ * Hide one of Foundry's windows from the player. visibility:hidden keeps the window active
+ * in Foundry's eyes (display:none would make it close itself); programmatic clicks still work.
+ */
+function hideWindow(element) {
+  if (element?.style) {
+    element.style.visibility = "hidden";
+    element.style.pointerEvents = "none";
+  }
+}
 
 // Wrapper for sendDiceRequest to use QWebChannel
 function sendDiceRequest(rollId, dice, formula, rollType) {
@@ -39,9 +69,7 @@ export function setupDialogMirroring() {
     const dialogRef = getMirroredDialog();
     if (dialogRef?.app === app) {
       debug("Mirrored roll dialog closed — clearing state");
-      setMirroredDialog(null);
-      setPendingRollRequest(null);
-      setDLAPhase(null);
+      clearRollState();
     }
     if (app?.element?.classList?.contains("dlc-dialog")) {
       debug("DLC dialog is closing");
@@ -56,29 +84,10 @@ export function setupDialogMirroring() {
 }
 
 /**
- * Check if the current user is in manual dice mode
- * Respects global overrides from the GM
- * Defensive: returns false if settings not ready yet
- */
-function isUserInManualMode() {
-  try {
-    const globalOverride = getGlobalOverride();
-    if (globalOverride === "forceAllManual") return true;
-    if (globalOverride === "forceAllDigital") return false;
-    const myMode = getPlayerMode();
-    return myMode === "manual";
-  } catch (e) {
-    // Settings not ready yet, default to digital mode
-    debug("isUserInManualMode: settings not ready, defaulting to false");
-    return false;
-  }
-}
-
-/**
  * Handle dialog render - check if it's a roll dialog and mirror it
  */
 function handleDialogRender(app, html) {
-  const htmlEl = html instanceof jQuery ? html[0] : html;
+  const htmlEl = windowElement(html);
   debug("[DLC-HTML-DIAG] app=" + (app?.constructor?.name ?? "null") +
     " nodeType=" + (htmlEl?.nodeType ?? "null") +
     " htmlType=" + (htmlEl?.constructor?.name ?? "null") +
@@ -92,19 +101,11 @@ function handleDialogRender(app, html) {
   if (!getConnectionStatus()) {
     // DLA not connected — if Foundry's RollResolver is showing, strip readOnly so the
     // user can type their physical dice values directly into Foundry's own inputs
-    if (isRollDialog(app)) {
-      const title = (app.title || "").toLowerCase();
-      const isResolver = title.includes("roll resolution") || title.includes("resolver") ||
-        app.constructor?.name?.toLowerCase().includes("rollresolver");
-      if (isResolver) {
-        const element = html instanceof jQuery ? html[0] : (html?.element || html);
-        if (element) {
-          element.querySelectorAll('input[type="number"]').forEach(input => {
-            input.readOnly = false;
-            input.removeAttribute("readonly");
-          });
-        }
-      }
+    if (isRollDialog(app) && isResolverWindow(app) && htmlEl) {
+      htmlEl.querySelectorAll('input[type="number"]').forEach(input => {
+        input.readOnly = false;
+        input.removeAttribute("readonly");
+      });
     }
     return;
   }
@@ -114,20 +115,9 @@ function handleDialogRender(app, html) {
 
   // Check if this is a roll dialog we should mirror
   if (isRoll) {
-    const title = (app.title || "").toLowerCase();
-    
-    // Hide the native dialog element
-    const htmlElement = html instanceof jQuery ? html[0] : html;
-    const elementToHide = htmlElement?.style ? htmlElement : html?.element;
-    
-    // Roll Resolution dialogs - mirror these too using the same pattern
-    if (title.includes("roll resolution") || title.includes("resolver") ||
-        app.constructor?.name?.toLowerCase().includes("rollresolver")) {
-      if (elementToHide?.style) {
-        elementToHide.style.visibility = "hidden";
-        elementToHide.style.pointerEvents = "none";
-      }
-      // Ask DLA for the dice this resolver needs
+    // Roll Resolution dialogs - hide, then ask DLA for the dice
+    if (isResolverWindow(app)) {
+      hideWindow(htmlEl);
       passRollResolverToDLA(app, html);
       return;
     }
@@ -135,13 +125,7 @@ function handleDialogRender(app, html) {
     // Pass it to DLA before hiding it: once hidden, the second render hook for the same
     // window is skipped (see the check in passRollDialogToDLA)
     passRollDialogToDLA(app, html);
-
-    // Hide the native dialog AFTER passing it on
-    // visibility:hidden keeps the app active in Foundry's eyes; display:none triggers auto-close
-    if (elementToHide?.style) {
-      elementToHide.style.visibility = "hidden";
-      elementToHide.style.pointerEvents = "none";
-    }
+    hideWindow(htmlEl);
   }
 }
 
@@ -229,22 +213,11 @@ function isRollDialog(app) {
  */
 function passRollDialogToDLA(app, html) {
   try {
-    debugCloning("Starting passRollDialogToDLA", { appTitle: app?.title, htmlType: html?.constructor?.name });
+    debugRollWindow("Starting passRollDialogToDLA", { appTitle: app?.title, htmlType: html?.constructor?.name });
 
-    let dialogElement;
-    if (html instanceof jQuery) {
-      dialogElement = html[0];
-      debugCloning("HTML is jQuery", { length: html.length });
-    } else if (html?.element) {
-      dialogElement = html.element;
-      debugCloning("HTML has .element property", { tagName: html.element?.tagName });
-    } else if (html?.nodeType === 1) {
-      dialogElement = html;
-      debugCloning("HTML is Element (nodeType=1)", { tagName: html.tagName });
-    }
-
+    const dialogElement = windowElement(html);
     if (!dialogElement) {
-      debugCloning("ERROR: Could not find the dialog element", { html });
+      debugRollWindow("ERROR: Could not find the dialog element", { html });
       return;
     }
 
@@ -259,7 +232,7 @@ function passRollDialogToDLA(app, html) {
     // The hook fires twice (renderRollConfigurationDialog + renderApplicationV2) and
     // the second time the element has visibility:hidden set by the first processing pass
     if (dialogElement.style?.visibility === 'hidden') {
-      debugCloning("Skipping - element already hidden (duplicate hook call)", {});
+      debugRollWindow("Skipping - element already hidden (duplicate hook call)", {});
       return;
     }
 
@@ -273,11 +246,11 @@ function passRollDialogToDLA(app, html) {
       data: formData
     });
 
-    debugCloning("setMirroredDialog called successfully", {});
+    debugRollWindow("setMirroredDialog called successfully", {});
 
   } catch (e) {
     debugError("Error mirroring dialog:", e);
-    debugCloning("ERROR in passRollDialogToDLA", { error: e.message, stack: e.stack });
+    debugRollWindow("ERROR in passRollDialogToDLA", { error: e.message, stack: e.stack });
   }
 }
 
@@ -287,18 +260,7 @@ function passRollDialogToDLA(app, html) {
  */
 function passRollResolverToDLA(app, html) {
   try {
-    // Normalize html to a DOM element
-    let element;
-    if (html instanceof jQuery) {
-      element = html[0];
-    } else if (html?.element) {
-      element = html.element;
-    } else if (html?.nodeType === 1) {
-      element = html;
-    } else {
-      element = app?.element?.[0] || app?.element;
-    }
-
+    const element = windowElement(html) || app?.element?.[0] || app?.element;
     if (!element) {
       debug("passRollResolverToDLA: Could not find element");
       return;
@@ -360,9 +322,8 @@ function passRollResolverToDLA(app, html) {
     sendDiceRequest(rollId, consolidatedDice, formula, rollType);
     setDLAPhase("diceRequested");
 
-    // Hide resolver — DLA handles dice entry; visibility:hidden keeps Foundry's app active
-    element.style.visibility = "hidden";
-    element.style.pointerEvents = "none";
+    // Hide resolver — DLA handles dice entry
+    hideWindow(element);
     
   } catch (e) {
     debugError("Error mirroring RollResolver:", e);
@@ -373,17 +334,8 @@ function passRollResolverToDLA(app, html) {
  * Extract relevant form data from the native dialog
  */
 function extractDialogFormData(app, html) {
-  // Normalize html to a DOM element
-  let element;
-  if (html instanceof jQuery) {
-    element = html[0];
-  } else if (html?.element) {
-    element = html.element;
-  } else if (html?.nodeType === 1) {
-    element = html;
-  } else {
-    element = app?.element?.[0] || app?.element || document.querySelector(`[data-appid="${app?.appId}"]`);
-  }
+  const element = windowElement(html) || app?.element?.[0] || app?.element ||
+    document.querySelector(`[data-appid="${app?.appId}"]`);
   
   if (!element) {
     return null;
@@ -444,16 +396,29 @@ function extractDialogFormData(app, html) {
     data.formula = formulaElement.textContent.trim();
   }
 
-  debug("extractDialogFormData: buttons captured", JSON.stringify(data.buttons.map(b => ({
-    label: b.label,
-    action: b.action,
-    tagName: b.element?.tagName,
-    type: b.element?.type
-  }))));
+  debug("extractDialogFormData: buttons captured", describeButtons(data.buttons));
 
   return data;
 }
 
+
+// Labels DLA shows for the roll options it knows; any other option name is made readable
+const FIELD_LABELS = {
+  situational: 'Situational Bonus',
+  rollMode: 'Roll Mode',
+  ability: 'Ability',
+  skill: 'Skill',
+  tool: 'Tool',
+  dc: 'DC',
+  flavor: 'Flavor Text'
+};
+
+/** A roll option's label for DLA, from its form name (e.g. "roll.0.situational"). */
+function fieldLabel(fieldName) {
+  const baseName = fieldName.includes('.') ? fieldName.split('.').pop() : fieldName;
+  if (FIELD_LABELS[baseName]) return FIELD_LABELS[baseName];
+  return baseName.charAt(0).toUpperCase() + baseName.slice(1).replace(/([A-Z])/g, ' $1');
+}
 
 /**
  * Extract roll data from a mirrored dialog and format it for sending to DLA.
@@ -477,25 +442,10 @@ export function extractRollDataForDLA(dialogData) {
   const configFields = [];
   if (formData?.inputs) {
     for (const [name, input] of Object.entries(formData.inputs)) {
-      const generateLabel = (fieldName) => {
-        const labelMap = {
-          'situational': 'Situational Bonus',
-          'rollMode': 'Roll Mode',
-          'ability': 'Ability',
-          'skill': 'Skill',
-          'tool': 'Tool',
-          'dc': 'DC',
-          'flavor': 'Flavor Text'
-        };
-        const baseName = fieldName.includes('.') ? fieldName.split('.').pop() : fieldName;
-        if (labelMap[baseName]) return labelMap[baseName];
-        return baseName.charAt(0).toUpperCase() + baseName.slice(1).replace(/([A-Z])/g, ' $1');
-      };
-
       if (input.type === "select-one" || input.options) {
-        configFields.push({ name, label: generateLabel(name), type: "select", options: input.options || [], selected: input.value });
+        configFields.push({ name, label: fieldLabel(name), type: "select", options: input.options || [], selected: input.value });
       } else if (input.type === "text" || input.type === "number" || !input.type) {
-        configFields.push({ name, label: generateLabel(name), type: input.type || "text", value: input.value || "" });
+        configFields.push({ name, label: fieldLabel(name), type: input.type || "text", value: input.value || "" });
       }
     }
   }

@@ -35,20 +35,6 @@
   color: var(--dlc-text-primary);
 }
 
-.dlc-dialog .window-content {
-  background: var(--dlc-bg-dark);
-  padding: 0;
-  overflow: hidden;
-  max-width: 100%;
-}
-
-/* Constrain window content to prevent horizontal stretching */
-.dlc-dialog .window-content,
-.dlc-dialog .dlc-window-content-constrained {
-  overflow-x: hidden !important;
-  max-width: 100% !important;
-}
-
 /* ============================================================================
    MAIN PANEL CONTAINER
    ============================================================================ */
@@ -731,36 +717,21 @@
    PLAYER PANEL LAYOUT - matches GM panel grid behaviour
    ============================================================================ */
 
-/* Player panel uses the same grid as GM's .dlc-players-grid */
+/* The player panel uses the GM panel's grid and cards (.dlc-players-grid, .dlc-player-card),
+   a little tighter */
 .dlc-player-panel .dlc-players-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 6px;
-  align-items: stretch;
   grid-auto-rows: 44px;
 }
 
-/* Self-card in player panel - same height as others but with actions */
+/* The player's own card */
 .dlc-player-panel .dlc-player-card-self {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
   padding: 0 8px;
   gap: 4px;
 }
 
 .dlc-player-panel .dlc-player-card-self .dlc-player-info {
-  display: flex;
-  align-items: center;
   gap: 4px;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.dlc-player-panel .dlc-player-card-self .dlc-player-actions {
-  flex-shrink: 0;
 }
 
 .dlc-self-indicator {
@@ -780,7 +751,8 @@
   min-height: unset !important;
 }
 
-/* Remove Foundry's inner white/light window-content border box */
+/* The panel's content area (Foundry's frame section and our wrapper inside it): no inner
+   white/light box, scrolls down instead of stretching sideways */
 .dlc-dialog .window-content {
   padding: 0 !important;
   background: var(--dlc-bg-dark) !important;
@@ -788,6 +760,8 @@
   box-shadow: none !important;
   height: auto !important;
   max-height: 85vh !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
   overflow-y: auto !important;
   scrollbar-width: thin;
   scrollbar-color: var(--dlc-border) transparent;

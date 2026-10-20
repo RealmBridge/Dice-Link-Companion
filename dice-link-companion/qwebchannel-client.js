@@ -15,18 +15,37 @@ let isConnected = false;
 let dlaInterface = null;
 let connectionChangeCallbacks = [];
 
-// Callbacks other DLC scripts register, one per message from DLA
-let buttonSelectCallback = null;
-let diceResultCallback = null;
-let cancelCallback = null;
-let diceTrayRollCallback = null;
-let playerModeActionCallback = null;
-let cameraFrameCallback = null;
-let cameraStreamEndCallback = null;
-let chatInteractionCallback = null;
-let chatCommandCallback = null;
-let chatVisibilityCallback = null;
-let startBreakCallback = null;
+// Every message DLA sends DLC: the DLA signal it arrives on, and how its JSON is unpacked
+// into what the DLC script handling it receives. The camera signals carry no JSON (a
+// frame as base64 text, then a bare "stream ended"), so they are passed on as they come,
+// and not logged (a frame arrives many times a second).
+const FROM_DLA = {
+  rollCancelled:    { signal: "rollCancelledReady",    unpack: m => [m.id || m.originalRollId] },
+  diceResult:       { signal: "diceResultReady",       unpack: m => [m.originalRollId || m.id, m.results || []] },
+  buttonSelect:     { signal: "buttonSelectReady",     unpack: m => [m.id || m.originalRollId, m.button || "normal", m.configChanges || {}] },
+  diceTrayRoll:     { signal: "diceTrayRollReady",     unpack: m => [m.formula, m.flavor] },
+  playerModeAction: { signal: "playerModeActionReady", unpack: m => [m] },   // GM's Approve / Deny in DLA's player list
+  chatInteraction:  { signal: "chatInteractionReady",  unpack: m => [m] },   // a click on a chat card in DLA
+  chatCommand:      { signal: "chatCommandReady",      unpack: m => [m] },   // chat typed in DLA's tray
+  chatVisibility:   { signal: "chatVisibilityReady",   unpack: m => [m] },   // DLA's public / whisper / self / GM buttons
+  startBreak:       { signal: "startBreakReady",       unpack: m => [m] },   // GM break from DLA's timer
+  cameraFrame:      { signal: "cameraFrameReady",      raw: true },
+  cameraStreamEnd:  { signal: "cameraStreamEndReady",  raw: true }
+};
+
+// The DLC function handling each message from DLA (registered with onDLAMessage)
+const handlers = {};
+
+// Every message DLC sends DLA: its type, and the DLA receiver that takes it
+const TO_DLA = {
+  rollRequest: "receiveRollRequest",
+  diceRequest: "receiveDiceRequest",
+  playerModesUpdate: "receivePlayerModesUpdate",
+  chatMessage: "receiveChatMessage",
+  chatInit: "receiveChatMessage",
+  chatSetup: "receiveChatMessage",
+  chatVisibilityState: "receiveChatMessage"
+};
 
 // ============================================================================
 // INITIALIZATION - Check for QWebChannel / DLA Interface
@@ -144,67 +163,13 @@ function setupDLAInterface(dlaIface) {
 
     debugQWebChannel("Setting up signal handlers", {});
 
-    // Connect signal handlers for all message types
-
-    // Roll cancelled - callback expects: (rollId)
-    if (dlaInterface.rollCancelledReady) {
-      dlaInterface.rollCancelledReady.connect((data) => {
-        debugQWebChannel("Received rollCancelled signal", {});
-        const message = JSON.parse(data);
-        if (cancelCallback) {
-          cancelCallback(message.id || message.originalRollId);
-        }
-      });
-    }
-
-    // Dice result - callback expects: (rollId, results[])
-    if (dlaInterface.diceResultReady) {
-      dlaInterface.diceResultReady.connect((result) => {
-        debugQWebChannel("Received diceResult signal", {});
-        const message = JSON.parse(result);
-        if (diceResultCallback) {
-          diceResultCallback(
-            message.originalRollId || message.id,
-            message.results || []
-          );
-        }
-      });
-    }
-
-    // Button select - callback expects: (rollId, buttonClicked, configChanges)
-    if (dlaInterface.buttonSelectReady) {
-      dlaInterface.buttonSelectReady.connect((data) => {
-        debugQWebChannel("Received buttonSelect signal", {});
-        const message = JSON.parse(data);
-        if (buttonSelectCallback) {
-          buttonSelectCallback(
-            message.id || message.originalRollId,
-            message.button || "normal",
-            message.configChanges || {}
-          );
-        }
-      });
-    }
-
-    // Dice tray roll - callback expects: (formula, flavor)
-    if (dlaInterface.diceTrayRollReady) {
-      dlaInterface.diceTrayRollReady.connect((result) => {
-        debugQWebChannel("Received diceTrayRoll signal", {});
-        const message = JSON.parse(result);
-        if (diceTrayRollCallback) {
-          diceTrayRollCallback(message.formula, message.flavor);
-        }
-      });
-    }
-
-    // GM's Approve / Deny from DLA's player list - callback expects: ({ action, playerId })
-    if (dlaInterface.playerModeActionReady) {
-      dlaInterface.playerModeActionReady.connect((data) => {
-        debugQWebChannel("Received playerModeAction signal", {});
-        const message = JSON.parse(data);
-        if (playerModeActionCallback) {
-          playerModeActionCallback(message);
-        }
+    // Connect a handler for every message DLA sends (see FROM_DLA)
+    for (const [name, { signal, unpack, raw }] of Object.entries(FROM_DLA)) {
+      if (!dlaInterface[signal]) continue;
+      dlaInterface[signal].connect((...received) => {
+        if (!raw) debugQWebChannel(`Received ${name} signal`, {});
+        const handler = handlers[name];
+        if (handler) handler(...(raw ? received : unpack(JSON.parse(received[0]))));
       });
     }
 
@@ -213,56 +178,6 @@ function setupDLAInterface(dlaIface) {
       dlaInterface.connectionStatusReady.connect((status) => {
         debugQWebChannel("Received connectionStatus signal", { status });
         handleConnectionStatusChange(status);
-      });
-    }
-
-    // Camera stream frames
-    if (dlaInterface.cameraFrameReady) {
-      dlaInterface.cameraFrameReady.connect((frameB64) => {
-        if (cameraFrameCallback) cameraFrameCallback(frameB64);
-      });
-    }
-
-    // Camera stream ended
-    if (dlaInterface.cameraStreamEndReady) {
-      dlaInterface.cameraStreamEndReady.connect(() => {
-        if (cameraStreamEndCallback) cameraStreamEndCallback();
-      });
-    }
-
-    // Chat interaction forwarded from DLA user click
-    if (dlaInterface.chatInteractionReady) {
-      dlaInterface.chatInteractionReady.connect((data) => {
-        debugQWebChannel("Received chatInteraction signal", {});
-        const message = JSON.parse(data);
-        if (chatInteractionCallback) chatInteractionCallback(message);
-      });
-    }
-
-    // Chat command typed in DLA tray — forward to Foundry chat
-    if (dlaInterface.chatCommandReady) {
-      dlaInterface.chatCommandReady.connect((data) => {
-        debugQWebChannel("Received chatCommand signal", {});
-        const message = JSON.parse(data);
-        if (chatCommandCallback) chatCommandCallback(message);
-      });
-    }
-
-    // Chat visibility mode change from DLA tray — tell DLC to click Foundry's button
-    if (dlaInterface.chatVisibilityReady) {
-      dlaInterface.chatVisibilityReady.connect((data) => {
-        debugQWebChannel("Received chatVisibility signal", {});
-        const message = JSON.parse(data);
-        if (chatVisibilityCallback) chatVisibilityCallback(message);
-      });
-    }
-
-    // Start break from GM timer
-    if (dlaInterface.startBreakReady) {
-      dlaInterface.startBreakReady.connect((data) => {
-        debugQWebChannel("Received startBreak signal", {});
-        const message = JSON.parse(data);
-        if (startBreakCallback) startBreakCallback(message);
       });
     }
 
@@ -347,25 +262,11 @@ export function sendMessage(data) {
     const jsonData = JSON.stringify(data);
     debugQWebChannel("Sending message", { type: data.type, data: jsonData });
 
-    if (data.type === "rollRequest" && dlaInterface.receiveRollRequest) {
-      debugQWebChannel("Calling receiveRollRequest...", {});
-      dlaInterface.receiveRollRequest(jsonData);
-      debugQWebChannel("receiveRollRequest called successfully", {});
-    } else if (data.type === "diceRequest" && dlaInterface.receiveDiceRequest) {
-      debugQWebChannel("Calling receiveDiceRequest...", {});
-      dlaInterface.receiveDiceRequest(jsonData);
-    } else if (data.type === "playerModesUpdate" && dlaInterface.receivePlayerModesUpdate) {
-      debugQWebChannel("Calling receivePlayerModesUpdate...", {});
-      dlaInterface.receivePlayerModesUpdate(jsonData);
-    } else if ((data.type === "chatMessage" || data.type === "chatInit" || data.type === "chatSetup" || data.type === "chatVisibilityState") && dlaInterface.receiveChatMessage) {
-      dlaInterface.receiveChatMessage(jsonData);
+    const receiver = TO_DLA[data.type];
+    if (receiver && dlaInterface[receiver]) {
+      dlaInterface[receiver](jsonData);
     } else {
-      debugError("Unknown message type or handler not available", {
-        type: data.type,
-        hasReceiveRollRequest: !!dlaInterface.receiveRollRequest,
-        hasReceiveDiceRequest: !!dlaInterface.receiveDiceRequest,
-        hasReceivePlayerModesUpdate: !!dlaInterface.receivePlayerModesUpdate
-      });
+      debugError("Unknown message type or handler not available", { type: data.type, receiver });
     }
   } catch (error) {
     debugError("QWebChannel message send error", error);
@@ -376,48 +277,16 @@ export function sendMessage(data) {
 // CALLBACK REGISTRATION
 // ============================================================================
 
-export function setButtonSelectCallback(callback) {
-  buttonSelectCallback = callback;
-}
-
-export function setDiceResultCallback(callback) {
-  diceResultCallback = callback;
-}
-
-export function setCancelCallback(callback) {
-  cancelCallback = callback;
-}
-
-export function setDiceTrayRollCallback(callback) {
-  diceTrayRollCallback = callback;
-}
-
-export function setPlayerModeActionCallback(callback) {
-  playerModeActionCallback = callback;
-}
-
-export function setCameraFrameCallback(callback) {
-  cameraFrameCallback = callback;
-}
-
-export function setCameraStreamEndCallback(callback) {
-  cameraStreamEndCallback = callback;
-}
-
-export function setChatInteractionCallback(callback) {
-  chatInteractionCallback = callback;
-}
-
-export function setChatCommandCallback(callback) {
-  chatCommandCallback = callback;
-}
-
-export function setChatVisibilityCallback(callback) {
-  chatVisibilityCallback = callback;
-}
-
-export function setStartBreakCallback(callback) {
-  startBreakCallback = callback;
+/**
+ * Register the DLC function that handles one message from DLA (a name in FROM_DLA).
+ * It receives the message's unpacked data, e.g. onDLAMessage("diceResult", (rollId, results) => ...).
+ */
+export function onDLAMessage(name, handler) {
+  if (!FROM_DLA[name]) {
+    debugError("onDLAMessage: no such message from DLA", { name });
+    return;
+  }
+  handlers[name] = handler;
 }
 
 export function onConnectionChange(callback) {

@@ -1,7 +1,11 @@
 /**
- * chat.js - the chat cards for a player's manual dice request: the GM's card with Approve /
- * Deny buttons, and the player's "request sent" card. The buttons are handled in approval.js.
+ * chat.js - DLC's chat cards for manual dice requests: the GM's card with Approve / Deny
+ * buttons, the player's "request sent" card, and the "approved / denied" card. The
+ * buttons are handled in approval.js.
  */
+
+// The GMs' user IDs: the cards are whispered to them
+const gmUserIds = () => game.users.filter(u => u.isGM).map(u => u.id);
 
 // ============================================================================
 // CHAT MESSAGE FUNCTIONS
@@ -28,7 +32,7 @@ export async function createRequestChatMessage(playerId, playerName) {
 
   await ChatMessage.create({
     content: gmContent,
-    whisper: game.users.filter(u => u.isGM).map(u => u.id)
+    whisper: gmUserIds()
   });
 
   const playerContent = `
@@ -40,5 +44,24 @@ export async function createRequestChatMessage(playerId, playerName) {
   await ChatMessage.create({
     content: playerContent,
     whisper: [playerId]
+  });
+}
+
+/**
+ * Create a chat message showing approval/denial decision, for the player and the GMs
+ */
+export async function createApprovalChatMessage(playerId, playerName, approved) {
+  const status = approved ? "APPROVED" : "DENIED";
+  const color = approved ? "#10b981" : "#ef4444";
+
+  const content = `
+    <div class="dice-link-result" style="border-left: 4px solid ${color}; padding: 10px;">
+      <p><strong>${playerName}</strong>'s request for manual dice has been <strong style="color: ${color};">${status}</strong>.</p>
+    </div>
+  `;
+
+  await ChatMessage.create({
+    content,
+    whisper: [playerId, ...gmUserIds()]
   });
 }

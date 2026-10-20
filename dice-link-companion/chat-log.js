@@ -5,8 +5,9 @@
  * Foundry's and DLA's chat visibility (public / whisper / self / GM) in step.
  */
 
-import { sendMessage, getConnectionStatus, setChatInteractionCallback, setChatCommandCallback, setChatVisibilityCallback } from "./qwebchannel-client.js";
+import { sendMessage, getConnectionStatus, onDLAMessage } from "./qwebchannel-client.js";
 import { debug, debugChatLog } from "./debug.js";
+import { normaliseVisibility } from "./clip-visibility.js";
 
 // ============================================================================
 // OBSERVER + INTERACTION MAPS
@@ -25,6 +26,11 @@ const OBSERVER_TIMEOUT_MS = 15000;
 // HELPERS
 // ============================================================================
 
+/** A path on the Foundry server ("/x" or "x") as a full address on the given origin. */
+function toAbsolute(path, origin) {
+  return path.startsWith("/") ? `${origin}${path}` : `${origin}/${path}`;
+}
+
 /**
  * Rewrite relative src/href attributes to absolute URLs using the Foundry origin.
  */
@@ -32,10 +38,7 @@ function makeAbsolute(html) {
   const origin = window.location.origin;
   return html.replace(
     /\b(src|href|data-src)="(?!https?:\/\/|\/\/|data:|#|javascript:)([^"]*)"/g,
-    (match, attr, path) => {
-      const absolute = path.startsWith("/") ? `${origin}${path}` : `${origin}/${path}`;
-      return `${attr}="${absolute}"`;
-    }
+    (match, attr, path) => `${attr}="${toAbsolute(path, origin)}"`
   );
 }
 
@@ -215,7 +218,7 @@ function makeAbsoluteCss(css, origin, baseUrl) {
     if (baseUrl) {
       try { return new URL(path, baseUrl).href; } catch(e) {}
     }
-    return path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
+    return toAbsolute(path, origin);
   };
   css = css.replace(
     /url\((['"]?)(?!https?:\/\/|\/\/|data:|#)([^'")\s]+)\1\)/g,
@@ -278,6 +281,36 @@ async function embedFontDataUris(css) {
 }
 
 /**
+ * Fetch one same-origin stylesheet and add it, made self-contained, to styleTexts.
+ * Used for the page's <link> stylesheets and the files its <style> blocks @import.
+ * @param {string} url - the stylesheet's address
+ * @param {string} kind - "sheet" or "@import", for the log
+ */
+async function addSameOriginCss(url, kind, origin, styleTexts) {
+  const urlPath = (() => { try { return new URL(url).pathname; } catch(e) { return url; } })();
+  try {
+    if (new URL(url).origin !== origin) {
+      debugChatLog(`sendChatSetup: skipping cross-origin ${kind}: ${urlPath}`);
+      return;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      debugChatLog(`sendChatSetup: fetch failed (${response.status}) for ${kind}: ${urlPath}`);
+      return;
+    }
+    const text = await response.text();
+    if (text && text.trim()) {
+      styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin, url)));
+      debugChatLog(`sendChatSetup: fetched ${kind} ${urlPath} (${text.length} bytes)`);
+    } else {
+      debugChatLog(`sendChatSetup: empty response for ${kind}: ${urlPath}`);
+    }
+  } catch (e) {
+    debugChatLog(`sendChatSetup: error fetching ${kind} ${urlPath}: ${String(e)}`);
+  }
+}
+
+/**
  * Collect embedded CSS blocks, custom property values, and body classes
  * from the Foundry page, then send them to DLA so it can replicate Foundry's styling.
  * Sources: the page's <style> elements, its same-origin <link> stylesheets, the files
@@ -288,12 +321,33 @@ async function sendChatSetup() {
 
   const styleTexts = [];
 
-  // Collect inline <style> element text
+  // Files the <style> blocks pull in with @import. Foundry v14 loads system and module CSS
+  // this way rather than as <link> elements; fetching them from DLC (same-origin) avoids
+  // the CORS block DLA's browser would hit loading the same URLs cross-origin.
+  const alreadyFetched = new Set(
+    Array.from(document.styleSheets)
+      .filter(s => s.href)
+      .map(s => s.href.split('?')[0])
+  );
+  const importRegex = /(?:^|\n)\s*@import\s+(['"])(?!https?:\/\/|\/\/|data:)([^'"]+)\1/g;
+  const importUrlsToFetch = [];
+
+  // Collect inline <style> element text, noting the files each one @imports
   for (const sheet of document.styleSheets) {
     if (sheet.href) continue;
+    const text = sheet.ownerNode?.textContent;
+    if (!text) continue;
+    importRegex.lastIndex = 0;
+    let match;
+    while ((match = importRegex.exec(text)) !== null) {
+      const absolute = toAbsolute(match[2].split('?')[0], origin);
+      if (!alreadyFetched.has(absolute)) {
+        importUrlsToFetch.push(absolute);
+        alreadyFetched.add(absolute);
+      }
+    }
     try {
-      const text = sheet.ownerNode?.textContent;
-      if (text && text.trim()) {
+      if (text.trim()) {
         styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin)));
       }
     } catch (e) {
@@ -304,80 +358,12 @@ async function sendChatSetup() {
   // Fetch same-origin <link> stylesheets (foundry2.css and any others)
   for (const sheet of document.styleSheets) {
     if (!sheet.href) continue;
-    const sheetPath = (() => { try { return new URL(sheet.href).pathname; } catch(e) { return sheet.href; } })();
-    try {
-      if (new URL(sheet.href).origin !== origin) {
-        debugChatLog(`sendChatSetup: skipping cross-origin sheet: ${sheetPath}`);
-        continue;
-      }
-      const response = await fetch(sheet.href);
-      if (!response.ok) {
-        debugChatLog(`sendChatSetup: fetch failed (${response.status}) for: ${sheetPath}`);
-        continue;
-      }
-      const text = await response.text();
-      if (text && text.trim()) {
-        styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin, sheet.href)));
-        debugChatLog(`sendChatSetup: fetched ${sheetPath} (${text.length} bytes)`);
-      } else {
-        debugChatLog(`sendChatSetup: empty response for: ${sheetPath}`);
-      }
-    } catch (e) {
-      debugChatLog(`sendChatSetup: error fetching ${sheetPath}: ${String(e)}`);
-    }
+    await addSameOriginCss(sheet.href, "sheet", origin, styleTexts);
   }
 
-  // Fetch CSS files referenced by @import inside inline <style> blocks.
-  // Foundry v14 loads system and module CSS this way rather than as <link>
-  // elements. Fetching from DLC (same-origin) avoids the CORS block that
-  // DLA's browser would hit when trying to load the same URLs cross-origin.
-  {
-    const alreadyFetched = new Set(
-      Array.from(document.styleSheets)
-        .filter(s => s.href)
-        .map(s => s.href.split('?')[0])
-    );
-
-    const importRegex = /(?:^|\n)\s*@import\s+(['"])(?!https?:\/\/|\/\/|data:)([^'"]+)\1/g;
-    const importUrlsToFetch = [];
-
-    for (const sheet of document.styleSheets) {
-      if (sheet.href) continue;
-      const text = sheet.ownerNode?.textContent;
-      if (!text) continue;
-      importRegex.lastIndex = 0;
-      let match;
-      while ((match = importRegex.exec(text)) !== null) {
-        const path = match[2].split('?')[0];
-        const absolute = path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
-        if (!alreadyFetched.has(absolute)) {
-          importUrlsToFetch.push(absolute);
-          alreadyFetched.add(absolute);
-        }
-      }
-    }
-
-    for (const url of importUrlsToFetch) {
-      const urlPath = (() => { try { return new URL(url).pathname; } catch(e) { return url; } })();
-      try {
-        if (new URL(url).origin !== origin) {
-          debugChatLog(`sendChatSetup: skipping cross-origin @import: ${urlPath}`);
-          continue;
-        }
-        const response = await fetch(url);
-        if (!response.ok) {
-          debugChatLog(`sendChatSetup: fetch failed (${response.status}) for @import: ${urlPath}`);
-          continue;
-        }
-        const text = await response.text();
-        if (text && text.trim()) {
-          styleTexts.push(await embedFontDataUris(makeAbsoluteCss(text.trim(), origin, url)));
-          debugChatLog(`sendChatSetup: fetched @import ${urlPath} (${text.length} bytes)`);
-        }
-      } catch (e) {
-        debugChatLog(`sendChatSetup: error fetching @import ${urlPath}: ${String(e)}`);
-      }
-    }
+  // Then the @import files
+  for (const url of importUrlsToFetch) {
+    await addSameOriginCss(url, "@import", origin, styleTexts);
   }
 
   // Collect @font-face rules from constructable stylesheets.
@@ -446,32 +432,34 @@ async function sendChatSetup() {
 // CHAT VISIBILITY STATE — read Foundry's active chat type and report to DLA
 // ============================================================================
 
-// DLA mode key → Foundry v14 messageMode key.
-// In v14 the icon/key assignments shifted: "gm" means GM+sender both see (old "whisper"),
-// "blind" means GM-only/sender cannot see (old "GM only").
+// DLA mode key → Foundry v14 messageMode key (the other way round is the same table read
+// backwards). In v14 the icon/key assignments shifted: "gm" means GM+sender both see (old
+// "whisper"), "blind" means GM-only/sender cannot see (old "GM only").
 const _DLA_TO_FOUNDRY = {
   public:  'public',
   whisper: 'gm',
   self:    'self',
   gm:      'blind',
 };
-
-const _FOUNDRY_TO_DLA = {
-  public: 'public',
-  gm:     'whisper',
-  blind:  'gm',
-  self:   'self',
-  ic:     'public',
-};
+const _FOUNDRY_TO_DLA = Object.fromEntries(Object.entries(_DLA_TO_FOUNDRY).map(([dla, foundry]) => [foundry, dla]));
 
 let _lastReportedChatMode = null;
 
-/** Read the current Foundry messageMode and return the DLA equivalent. */
-function _readFoundryChatMode() {
+/**
+ * Foundry's current chat visibility (core messageMode) as public / gm / blind / self, or
+ * null if unknown. Also used for who may see a dice clip (main.mjs).
+ */
+export function currentChatVisibility() {
   try {
-    const foundryMode = game.settings.get("core", "messageMode");
-    return _FOUNDRY_TO_DLA[foundryMode] || null;
-  } catch(e) { return null; }
+    return normaliseVisibility(game.settings.get("core", "messageMode"));
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Foundry's current chat visibility as DLA names it. */
+function _readFoundryChatMode() {
+  return _FOUNDRY_TO_DLA[currentChatVisibility()] || null;
 }
 
 /** Send the active mode to DLA, suppressing duplicate reports. */
@@ -522,19 +510,18 @@ export function setupChatLog() {
   });
 
   // Register handler so qwebchannel-client can route chatInteraction signals here
-  setChatInteractionCallback(handleChatInteraction);
+  onDLAMessage("chatInteraction", handleChatInteraction);
 
   // Register handler for chat commands typed in DLA's tray
-  setChatCommandCallback(async (message) => {
+  onDLAMessage("chatCommand", async (message) => {
     if (message.content && ui.chat) {
       await ui.chat.processMessage(message.content);
     }
   });
 
-  // Register handler for visibility mode changes from DLA's tray
-  // Finds Foundry's matching chat type button by its FontAwesome icon class and clicks it,
-  // then immediately reports back so DLA knows the confirmed mode.
-  setChatVisibilityCallback(({ mode }) => {
+  // Register handler for visibility mode changes from DLA's tray: set Foundry's chat
+  // visibility, then immediately report back so DLA knows the confirmed mode.
+  onDLAMessage("chatVisibility", ({ mode }) => {
     const foundryMode = _DLA_TO_FOUNDRY[mode] || mode;
     try { game.settings.set("core", "messageMode", foundryMode); } catch(e) {}
     _reportChatModeToUI(mode);

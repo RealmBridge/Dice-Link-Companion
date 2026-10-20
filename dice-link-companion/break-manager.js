@@ -6,6 +6,7 @@
 
 import { MODULE_ID } from "./constants.js";
 import { debug } from "./debug.js";
+import { emitToPlayers } from "./socket.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -66,14 +67,14 @@ class BreakOverlayApp extends ApplicationV2 {
     const el = this.element;
 
     el.querySelector('#dlc-break-back-btn')?.addEventListener('click', () => {
-      markPlayerBack(game.user.id, true);
+      markPlayerStatus(game.user.id, true, true);
     });
     el.querySelector('#dlc-break-away-btn')?.addEventListener('click', () => {
-      markPlayerAway(game.user.id, true);
+      markPlayerStatus(game.user.id, false, true);
     });
     if (game.user?.isGM) {
       el.querySelector('#dlc-break-end-btn')?.addEventListener('click', () => {
-        game.socket.emit(`module.${MODULE_ID}`, { action: "breakEnd" });
+        emitToPlayers({ action: "breakEnd" });
         endBreak(true);
       });
     }
@@ -92,14 +93,8 @@ class BreakOverlayApp extends ApplicationV2 {
     if (this.#timer) { clearInterval(this.#timer); this.#timer = null; }
   }
 
-  setPlayerBack(userId) {
-    this.#playerBackStatus[userId] = true;
-    this.#refreshPlayerList();
-    if (userId === game.user.id) this.#refreshSelfButtons();
-  }
-
-  setPlayerAway(userId) {
-    this.#playerBackStatus[userId] = false;
+  setPlayerStatus(userId, isBack) {
+    this.#playerBackStatus[userId] = isBack;
     this.#refreshPlayerList();
     if (userId === game.user.id) this.#refreshSelfButtons();
   }
@@ -187,7 +182,7 @@ export function handleStartBreak(data) {
     .filter(u => u.active)
     .map(u => ({ id: u.id, name: u.name }));
 
-  game.socket.emit(`module.${MODULE_ID}`, {
+  emitToPlayers({
     action: "breakStart",
     durationMinutes,
     players
@@ -204,26 +199,19 @@ export function showBreakOverlay(durationMinutes, players) {
   _breakApp.render(true);
 }
 
-export function markPlayerBack(userId, isSelf = false) {
-  _breakApp?.setPlayerBack(userId);
+/**
+ * Mark a player as back from the break (isBack) or stepped away. When it's this player
+ * pressing their own button (isSelf), tell everyone else too.
+ */
+export function markPlayerStatus(userId, isBack, isSelf = false) {
+  _breakApp?.setPlayerStatus(userId, isBack);
   if (isSelf) {
-    game.socket.emit(`module.${MODULE_ID}`, { action: "breakPlayerBack", userId });
-  }
-}
-
-export function markPlayerAway(userId, isSelf = false) {
-  _breakApp?.setPlayerAway(userId);
-  if (isSelf) {
-    game.socket.emit(`module.${MODULE_ID}`, { action: "breakPlayerAway", userId });
+    emitToPlayers({ action: isBack ? "breakPlayerBack" : "breakPlayerAway", userId });
   }
 }
 
 export function endBreak(unpause = true) {
-  if (_breakApp) {
-    _breakApp.stopTimer();
-    _breakApp.close({ force: true });
-    _breakApp = null;
-  }
+  _breakApp?.close({ force: true });   // close() stops the countdown and forgets the window
   if (unpause && game.user?.isGM && game.paused) {
     game.togglePause(false, { broadcast: true });
   }

@@ -6,18 +6,15 @@
  * dice clip, a GM break, and the GM's Approve / Deny from DLA's player list.
  */
 
-import {
-  MODULE_ID,
-  ASYNC_OPERATION_DELAY_MS
-} from "./constants.js";
+import { ASYNC_OPERATION_DELAY_MS, GLOBAL_OVERRIDE_MODES } from "./constants.js";
 
 import {
   registerCoreSettings,
   registerPlayerModeSettings,
   registerPlayerModeSetting,
-  getPlayerMode,
   getGlobalOverride,
   getPendingRequests,
+  getPlayerModes,
   isUserInManualMode
 } from "./settings.js";
 
@@ -27,8 +24,8 @@ import {
   getDLAPhase,
   setPendingRollRequest,
   setCurrentPanelDialog,
-  setMirroredDialog,
   setDLAPhase,
+  clearRollState,
   onMirroredDialogChange
 } from "./state-management.js";
 
@@ -38,18 +35,20 @@ import {
   denyManualRequest
 } from "./approval.js";
 
-import { setupSocketListeners } from "./socket.js";
+import { setupSocketListeners, emitToPlayers } from "./socket.js";
 
-import { applyDigitalDice } from "./mode-application.js";
+import { applyManualDice, applyDigitalDice } from "./mode-application.js";
 
 import {
   setupDialogMirroring,
-  extractRollDataForDLA
+  extractRollDataForDLA,
+  windowElement
 } from "./dialog-mirroring.js";
 
 import {
   setupChatLog,
-  sendInitialChatHistory
+  sendInitialChatHistory,
+  currentChatVisibility
 } from "./chat-log.js";
 
 import {
@@ -59,24 +58,17 @@ import {
   installErrorDiagnostics
 } from "./debug.js";
 
-import {
-  generateGMPanelContent,
-  generatePlayerPanelContent
-} from "./ui-templates.js";
+import { generatePanelContent } from "./ui-templates.js";
 
 import {
   refreshPanel,
   openPanel as openPanelBase,
-  attachGMPanelListeners,
-  attachPlayerPanelListeners
+  attachPanelListeners
 } from "./dice-panel.js";
 
 import {
   setupDiceFulfillment,
-  ensureDSNEnabled,
   restoreDSN,
-  applyDiceLinkFulfillment,
-  removeDiceLinkFulfillment,
   executeDiceTrayRollManually,
   submitMirroredDialog
 } from "./dice-fulfillment.js";
@@ -85,14 +77,7 @@ import {
   connect as connectToDLA,
   onConnectionChange as onDLAConnectionChange,
   sendMessage as sendMessage_Common,
-  setButtonSelectCallback,
-  setDiceResultCallback,
-  setCancelCallback,
-  setDiceTrayRollCallback,
-  setPlayerModeActionCallback,
-  setCameraFrameCallback,
-  setCameraStreamEndCallback,
-  setStartBreakCallback
+  onDLAMessage
 } from "./qwebchannel-client.js";
 
 import {
@@ -119,18 +104,9 @@ let clipToOthers = true;         // whether this clip goes to the other players 
 function readDialogVisibility(dialogRef) {
   try {
     if (!dialogRef?.html) return null;
-    const html = dialogRef.html instanceof jQuery ? dialogRef.html : $(dialogRef.html);
+    const html = $(windowElement(dialogRef.html));
     const select = html.find('select[name$="rollMode"], select[name$="messageMode"]').first();
     return select.length ? normaliseVisibility(select.val()) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-/** Foundry's current chat visibility (core messageMode), or null if unknown. */
-function currentChatVisibility() {
-  try {
-    return normaliseVisibility(game.settings.get("core", "messageMode"));
   } catch (e) {
     return null;
   }
@@ -149,12 +125,11 @@ function sendRollRequest(data) {
   });
 }
 
-function sendPlayerModesUpdate(players, globalOverride, pendingRequests) {
+function sendPlayerModesUpdate(players, globalOverride) {
   sendMessage_Common({
     type: "playerModesUpdate",
     players: players || [],
     globalOverride: globalOverride || null,
-    pendingRequests: pendingRequests || [],
     worldId: game.world.id,
     worldTitle: game.world.title
   });
@@ -183,14 +158,9 @@ class DiceLinkCompanionApp extends ApplicationV2 {
       title: "Dice Link Companion",
       resizable: true,
       minimizable: true,
-      positioned: true,
-      contentClasses: ["dlc-window-content-constrained"]
+      positioned: true
     }
   };
-
-  get title() {
-    return "Dice Link Companion";
-  }
 
   get isGM() {
     return this._isGM;
@@ -201,10 +171,9 @@ class DiceLinkCompanionApp extends ApplicationV2 {
   }
 
   async _renderHTML(context, options) {
-    const content = this._isGM ? generateGMPanelContent() : generatePlayerPanelContent();
     const wrapper = document.createElement("div");
     wrapper.classList.add("window-content");
-    wrapper.innerHTML = content;
+    wrapper.innerHTML = generatePanelContent(this._isGM);
     return wrapper;
   }
 
@@ -213,15 +182,8 @@ class DiceLinkCompanionApp extends ApplicationV2 {
   }
 
   _onRender(context, options) {
-    const html = this.element;
-    const $html = $(html);
-    
-    if (this._isGM) {
-      attachGMPanelListeners($html);
-    } else {
-      attachPlayerPanelListeners($html);
-    }
-    
+    attachPanelListeners($(this.element), this._isGM);
+        
     // Defer positioning until element is fully rendered and attached to DOM
     // Use requestAnimationFrame to ensure browser has painted the element
     requestAnimationFrame(() => {
@@ -317,10 +279,10 @@ Hooks.once("ready", async () => {
     // QWebChannel automatically detects if DLA is running via Qt
     // If not running, features remain disabled
     debug("Initializing QWebChannel connection with DLA (Qt embedded)...");
+    // (the "Connected to Dice Link App" notice comes from the connection change below)
     connectToDLA().then(connected => {
       if (connected) {
         debug("QWebChannel: Connected to DLA");
-        ui.notifications?.info("Connected to Dice Link App");
       } else {
         debug("QWebChannel: DLA not detected - module running in standard Foundry mode");
         // Leave Foundry's fulfillment system exactly as it was — nothing to restore
@@ -331,13 +293,12 @@ Hooks.once("ready", async () => {
     onDLAConnectionChange((connected) => {
       debug("Dice Link App connection status:", connected ? "connected" : "disconnected");
       if (!connected) {
-        restoreDSN();
-        removeDiceLinkFulfillment();
+        applyDigitalDice();   // also lets Dice So Nice animate again
       }
       if (connected) {
         ui.notifications?.info("Connected to Dice Link App");
         if (isUserInManualMode()) {
-          applyDiceLinkFulfillment();
+          applyManualDice();
         }
         sendInitialChatHistory();
         setTimeout(() => {
@@ -354,7 +315,7 @@ Hooks.once("ready", async () => {
     // Execute the formula in Foundry - this will trigger the normal flow
     // (Foundry shows resolver -> we mirror -> send diceRequest -> etc)
     // ========================================================================
-    setDiceTrayRollCallback(async (formula, flavor) => {
+    onDLAMessage("diceTrayRoll", async (formula, flavor) => {
       debug("Dice tray roll from DLA", { formula, flavor });
 
       try {
@@ -373,7 +334,7 @@ Hooks.once("ready", async () => {
     // CANCEL: Roll cancelled by user in DLA
     // Close hidden Foundry dialog and clear all state
     // ========================================================================
-    setCancelCallback((rollId) => {
+    onDLAMessage("rollCancelled", (rollId) => {
       rollClipVisibility = null;
       debug("Roll cancelled by DLA user", { rollId });
       
@@ -390,9 +351,7 @@ Hooks.once("ready", async () => {
       }
       
       // Clear all pending state
-      setMirroredDialog(null);
-      setPendingRollRequest(null);
-      setDLAPhase(null);
+      clearRollState();
       refreshPanel();
     });
 
@@ -402,7 +361,7 @@ Hooks.once("ready", async () => {
     // We apply config changes and click the hidden Foundry dialog button.
     // This triggers Foundry to process and show its dice resolver.
     // ========================================================================
-    setButtonSelectCallback((rollId, buttonClicked, configChanges) => {
+    onDLAMessage("buttonSelect", (rollId, buttonClicked, configChanges) => {
       debug("Phase A: Button selection from DLA", { rollId, buttonClicked, configChanges });
       
       // Set phase to buttonClicked - prevents sending duplicate rollRequests
@@ -411,7 +370,7 @@ Hooks.once("ready", async () => {
       // Apply config changes to the hidden dialog if any
       const dialogRef = getMirroredDialog();
       if (dialogRef && configChanges && Object.keys(configChanges).length > 0) {
-        const originalHtml = dialogRef.html instanceof jQuery ? dialogRef.html : $(dialogRef.html);
+        const originalHtml = $(windowElement(dialogRef.html));
         for (const [name, value] of Object.entries(configChanges)) {
           const input = originalHtml.find(`[name="${name}"]`);
           if (input.length > 0) {
@@ -445,7 +404,7 @@ Hooks.once("ready", async () => {
     // User rolled dice and submitted results in DLA.
     // We inject these values into Foundry's dice resolver.
     // ========================================================================
-    setDiceResultCallback((rollId, results) => {
+    onDLAMessage("diceResult", (rollId, results) => {
       debug("Phase B: Dice results from DLA", JSON.stringify({ rollId, resultCount: results.length, results }));
       rollClipVisibility = null;
 
@@ -455,10 +414,7 @@ Hooks.once("ready", async () => {
 
       if (!resolver) {
         debug("No roll resolver found in DOM for dice injection");
-  
-        setMirroredDialog(null);
-        setPendingRollRequest(null);
-        setDLAPhase(null);
+        clearRollState();
         refreshPanel();
         return;
       }
@@ -560,16 +516,14 @@ Hooks.once("ready", async () => {
           }
         }
 
-  
-        setMirroredDialog(null);
-        setPendingRollRequest(null);
-        setDLAPhase(null);
+
+        clearRollState();
         refreshPanel();
       }, 100);
     });
 
     // GM break started from DLA's timer (break-manager.js does the work)
-    setStartBreakCallback((data) => {
+    onDLAMessage("startBreak", (data) => {
       debug("startBreak received from DLA", data);
       handleStartBreak(data);
     });
@@ -582,7 +536,7 @@ Hooks.once("ready", async () => {
     let localBroadcastEnded = false;
     // Display frame locally and broadcast to all other players via game.socket.
     // Do not simplify — the socket broadcast is what makes video visible to players, not just GM.
-    setCameraFrameCallback((frameB64) => {
+    onDLAMessage("cameraFrame", (frameB64) => {
       const uid = game.user.id;
       if (!clipActive) {
         // First frame of a new clip: lock who may see it for the whole clip.
@@ -598,20 +552,20 @@ Hooks.once("ready", async () => {
       if (!clipToOthers) return;   // Self only, or a DM's private roll: nobody else sees it
       encodeSelfStreamWebP((networkFrame) => {
         if (networkFrame && !localBroadcastEnded) {
-          game.socket.emit(`module.${MODULE_ID}`, {
+          emitToPlayers({
             action: "cameraFrame", frameB64: networkFrame, userId: uid,
             visibility: clipVisibility, rollerIsGM: game.user.isGM
           });
         }
       });
     });
-    setCameraStreamEndCallback(() => {
+    onDLAMessage("cameraStreamEnd", () => {
       const uid = game.user.id;
       localBroadcastEnded = true;
       const wasSent = clipToOthers;
       clipActive = false;
       endDiceStream(uid);
-      if (wasSent) game.socket.emit(`module.${MODULE_ID}`, { action: "cameraStreamEnd", userId: uid });
+      if (wasSent) emitToPlayers({ action: "cameraStreamEnd", userId: uid });
     });
 
     // Free a player's clip spot when they disconnect, so a reconnect fills the lowest gap.
@@ -619,31 +573,24 @@ Hooks.once("ready", async () => {
       if (!connected) freeDiceStreamSlot(user.id);
     });
 
-    ensureDSNEnabled();
-    const globalOverride = getGlobalOverride();
-    if (globalOverride === "forceAllDigital") {
+    restoreDSN();   // Dice So Nice animates until manual mode switches it off
+    if (getGlobalOverride() === GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL) {
       applyDigitalDice();
     }
     // ========================================================================
     // PLAYER MODES: Send initial state to DLA and handle mode changes
     // All users (GM and players) receive playerModesUpdate so everyone can
-    // see the Player Modes section. Only GMs see approve/deny buttons in DLA.
+    // see the Player Modes section. Only GMs see approve/deny buttons in DLA:
+    // a player marked isPending is a manual dice request waiting for the GM.
     // ========================================================================
-    
+
     // Function to gather and send player modes to DLA
     const sendPlayerModes = () => {
       const globalOverride = getGlobalOverride();
-      const players = [];
-      for (const user of game.users) {
-        let effectiveMode;
-        if (globalOverride === "forceAllManual") {
-          effectiveMode = "manual";
-        } else if (globalOverride === "forceAllDigital") {
-          effectiveMode = "digital";
-        } else {
-          effectiveMode = getPlayerMode(user.id);
-        }
-        const actor = user.character;
+      const pending = getPendingRequests();
+      // Each player's mode, plus their character's name and portrait for DLA
+      const players = getPlayerModes(globalOverride, pending).map(player => {
+        const actor = game.users.get(player.id)?.character;
         let portraitUrl = null;
         if (actor?.img) {
           const img = actor.img;
@@ -651,26 +598,15 @@ Hooks.once("ready", async () => {
             ? img
             : window.location.origin + foundry.utils.getRoute(img);
         }
-        players.push({
-          id: user.id,
-          name: user.name,
-          mode: effectiveMode,
-          isGM: user.isGM,
-          isSelf: user.id === game.user?.id,
-          characterName: actor?.name || null,
-          portraitUrl
-        });
-      }
-      // Only include pending requests - DLA will only show these to GMs
-      const pending = getPendingRequests();
-      
-      debug("Sending player modes to DLA", { 
-        playerCount: players.length, 
-        globalOverride,
-        pendingCount: pending?.length || 0 
+        return { ...player, characterName: actor?.name || null, portraitUrl };
       });
-      
-      sendPlayerModesUpdate(players, globalOverride, pending);
+      debug("Sending player modes to DLA", {
+        playerCount: players.length,
+        globalOverride,
+        pendingCount: pending.length
+      });
+
+      sendPlayerModesUpdate(players, globalOverride);
     };
 
     // Re-send player modes whenever they change (via settings socket)
@@ -681,7 +617,7 @@ Hooks.once("ready", async () => {
 
     // The GM pressed Approve / Deny in DLA's player list: same as the chat card buttons
     if (game.user?.isGM) {
-      setPlayerModeActionCallback(({ action, playerId }) => {
+      onDLAMessage("playerModeAction", ({ action, playerId }) => {
         debug("Player mode action from DLA", { action, playerId });
         if (!playerId) return;
         if (action === "approve") approveManualRequest(playerId);
