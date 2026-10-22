@@ -25,7 +25,7 @@ class BreakOverlayApp extends ApplicationV2 {
     id: "dlc-break-overlay",
     classes: ["dlc-break-app"],
     window: {
-      title: "Session is on a break",
+      title: "DICE_LINK.Break.Title",   // Foundry looks the key up in en.json
       resizable: false,
       minimizable: false,
     },
@@ -106,7 +106,7 @@ class BreakOverlayApp extends ApplicationV2 {
         clearInterval(this.#timer);
         this.#timer = null;
         if (el) {
-          el.textContent = 'BREAK OVER';
+          el.textContent = game.i18n.localize("DICE_LINK.Break.Over");
           el.classList.add('break-over');
         }
       } else {
@@ -148,16 +148,16 @@ class BreakOverlayApp extends ApplicationV2 {
         </div>
         <div class="dlc-break-body">
           <div class="dlc-break-players">
-            <div class="dlc-break-players-label">Players</div>
+            <div class="dlc-break-players-label">${game.i18n.localize("DICE_LINK.Break.Players")}</div>
             <div class="dlc-break-player-list" id="dlc-break-player-list">
               ${playerListHTML}
             </div>
           </div>
           <div class="dlc-break-status-actions">
-            <button id="dlc-break-back-btn" class="dlc-break-back-btn">I'm Back!</button>
-            <button id="dlc-break-away-btn" class="dlc-break-away-btn" disabled>Step Away</button>
+            <button id="dlc-break-back-btn" class="dlc-break-back-btn">${game.i18n.localize("DICE_LINK.Break.Back")}</button>
+            <button id="dlc-break-away-btn" class="dlc-break-away-btn" disabled>${game.i18n.localize("DICE_LINK.Break.Away")}</button>
           </div>
-          ${isGM ? '<button id="dlc-break-end-btn" class="dlc-break-end-btn">End Break</button>' : ''}
+          ${isGM ? `<button id="dlc-break-end-btn" class="dlc-break-end-btn">${game.i18n.localize("DICE_LINK.Break.End")}</button>` : ''}
         </div>
       </div>
     `;

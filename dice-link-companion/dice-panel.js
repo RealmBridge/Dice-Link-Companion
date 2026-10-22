@@ -6,7 +6,7 @@
  * Also sends DLA the player list for its own Player Modes list, whenever the panel's changes.
  */
 
-import { ROLE_NAMES, GLOBAL_OVERRIDE_MODES, PLAYER_MODES } from "./constants.js";
+import { ROLE_NAME_KEYS, GLOBAL_OVERRIDE_MODES, PLAYER_MODES } from "./constants.js";
 import { debug } from "./debug.js";
 import {
   getCurrentPanelDialog,
@@ -34,18 +34,18 @@ import { emitToPlayers, onPlayerMessage } from "./socket.js";
 import { sendMessage } from "./qwebchannel-client.js";
 import { generatePanelContent } from "./ui-templates.js";
 
-// What the GM sees when they change the group override
+// What the GM sees when they change the group override (keys in en.json)
 const OVERRIDE_NOTICES = {
-  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL]: "Forced all to manual dice.",
-  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL]: "Forced all to digital dice.",
-  [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "Set to individual control."
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL]: "DICE_LINK.Notify.AllManual",
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL]: "DICE_LINK.Notify.AllDigital",
+  [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "DICE_LINK.Notify.ChooseOwn"
 };
 
 // ...and what each player sees
 const PLAYER_OVERRIDE_NOTICES = {
-  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL]: "GM has forced manual dice for everyone.",
-  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL]: "GM has forced digital dice for everyone.",
-  [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "GM has returned to individual control."
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL]: "DICE_LINK.Notify.GMSetManual",
+  [GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL]: "DICE_LINK.Notify.GMSetDigital",
+  [GLOBAL_OVERRIDE_MODES.INDIVIDUAL]: "DICE_LINK.Notify.ChooseOwn"
 };
 
 // ---- The panel window ----
@@ -66,7 +66,7 @@ class DiceLinkCompanionApp extends ApplicationV2 {
       height: "auto"
     },
     window: {
-      title: "Dice Link Companion",
+      title: "DICE_LINK.Title",   // Foundry looks the key up in en.json
       resizable: true,
       minimizable: true,
       positioned: true
@@ -154,7 +154,7 @@ export function setupPanelMessages() {
   onPlayerMessage("globalOverride", ({ mode }) => {
     if (!PLAYER_OVERRIDE_NOTICES[mode]) return;
     applyModeForOverride(mode);
-    ui.notifications.info(PLAYER_OVERRIDE_NOTICES[mode]);
+    ui.notifications.info(game.i18n.localize(PLAYER_OVERRIDE_NOTICES[mode]));
   });
 }
 
@@ -250,7 +250,8 @@ function attachGMPanelListeners(html) {
     const enabled = $(this).is(":checked");
     const success = await setManualRollsPermission(role, enabled);
     if (success) {
-      ui.notifications.info(`Manual rolls ${enabled ? 'enabled' : 'disabled'} for ${ROLE_NAMES[role]}.`);
+      ui.notifications.info(game.i18n.format(enabled ? "DICE_LINK.Notify.RoleEnabled" : "DICE_LINK.Notify.RoleDisabled",
+        { role: game.i18n.localize(ROLE_NAME_KEYS[role]) }));
     }
     refreshPanel();
   });
@@ -258,7 +259,7 @@ function attachGMPanelListeners(html) {
   // Refresh button
   html.find(".dlc-refresh-btn").click( function() {
     refreshPanel();
-    ui.notifications.info("Panel refreshed.");
+    ui.notifications.info(game.i18n.localize("DICE_LINK.Notify.PanelRefreshed"));
   });
 
   // Group override switches: ticking Manual or Digital forces everyone into it; unticking
@@ -271,7 +272,7 @@ function attachGMPanelListeners(html) {
     await setGlobalOverride(mode);
     applyModeForOverride(mode);
     emitToPlayers({ action: "globalOverride", mode });
-    ui.notifications.info(OVERRIDE_NOTICES[mode]);
+    ui.notifications.info(game.i18n.localize(OVERRIDE_NOTICES[mode]));
   });
 
   // GM mode toggle (switch style)
@@ -281,7 +282,7 @@ function attachGMPanelListeners(html) {
 
     await setPlayerMode(game.user.id, newMode);
     applyMode(newMode);
-    ui.notifications.info(isManual ? "Your dice: Manual" : "Your dice: Digital");
+    ui.notifications.info(game.i18n.localize(isManual ? "DICE_LINK.Notify.YourDiceManual" : "DICE_LINK.Notify.YourDiceDigital"));
   });
 
   // Approve / Deny / Revoke buttons (approval.js does the work)

@@ -2,13 +2,14 @@
  * ui-templates.js - the HTML of the DLC panel: the GM panel (settings: permissions, group
  * override, the GM's own mode; pending requests; player modes) and the player panel
  * (player modes, request manual dice / switch to digital). Builds HTML only; the buttons
- * are handled in dice-panel.js.
+ * are handled in dice-panel.js. Its words come from DLC's language file (en.json), and the
+ * role names from Foundry's own.
  */
 
 import {
   REALM_BRIDGE_URL,
   LOGO_URL,
-  ROLE_NAMES,
+  ROLE_NAME_KEYS,
   GLOBAL_OVERRIDE_MODES,
   PLAYER_MODES
 } from "./constants.js";
@@ -31,8 +32,8 @@ import { getManualRollsPermissions } from "./settings-helpers.js";
 function headerHTML() {
   return `
       <div class="dlc-header">
-        <a href="${REALM_BRIDGE_URL}" target="_blank" class="dlc-logo-link" title="Visit Realm Bridge">
-          <img src="${LOGO_URL}" alt="Realm Bridge" class="dlc-logo" onerror="this.style.display='none'">
+        <a href="${REALM_BRIDGE_URL}" target="_blank" class="dlc-logo-link" title="${game.i18n.localize("DICE_LINK.Panel.LogoTooltip")}">
+          <img src="${LOGO_URL}" alt="${game.i18n.localize("DICE_LINK.Panel.LogoAlt")}" class="dlc-logo" onerror="this.style.display='none'">
         </a>
       </div>`;
 }
@@ -61,7 +62,7 @@ function playerInfoHTML(player, isYou = false) {
                   <div class="dlc-player-info">
                     <span class="dlc-mode-dot ${player.isPending ? 'pending' : player.mode}"></span>
                     <span class="dlc-player-name">${player.name}</span>${isYou ? `
-                    <span class="dlc-self-indicator">(You)</span>` : ''}
+                    <span class="dlc-self-indicator">${game.i18n.localize("DICE_LINK.Panel.You")}</span>` : ''}
                   </div>`;
 }
 
@@ -69,10 +70,10 @@ function playerInfoHTML(player, isYou = false) {
 function modeLegendHTML(withRevoke) {
   return `
             <div class="dlc-mode-legend">
-              <span class="dlc-legend-item"><span class="dlc-mode-dot digital"></span>Digital</span>
-              <span class="dlc-legend-item"><span class="dlc-mode-dot manual"></span>Manual</span>
-              <span class="dlc-legend-item"><span class="dlc-mode-dot pending"></span>Pending</span>${withRevoke ? `
-              <span class="dlc-legend-item"><span class="dlc-revoke-dot"></span>Revoke</span>` : ''}
+              <span class="dlc-legend-item"><span class="dlc-mode-dot digital"></span>${game.i18n.localize("DICE_LINK.Digital")}</span>
+              <span class="dlc-legend-item"><span class="dlc-mode-dot manual"></span>${game.i18n.localize("DICE_LINK.Manual")}</span>
+              <span class="dlc-legend-item"><span class="dlc-mode-dot pending"></span>${game.i18n.localize("DICE_LINK.Panel.Pending")}</span>${withRevoke ? `
+              <span class="dlc-legend-item"><span class="dlc-revoke-dot"></span>${game.i18n.localize("DICE_LINK.Panel.Revoke")}</span>` : ''}
             </div>`;
 }
 
@@ -100,11 +101,11 @@ function generateGMPanelContent() {
       ${headerHTML()}
 
       <!-- Top Row: Permissions | Global Override | GM Mode (Collapsible) -->
-      ${sectionHTML("topRow", collapsedSections.topRow, "fa-cog", "Settings", `
+      ${sectionHTML("topRow", collapsedSections.topRow, "fa-cog", game.i18n.localize("DICE_LINK.Panel.Settings"), `
           <div class="dlc-top-row">
         <!-- Permissions -->
         <div class="dlc-mini-section">
-          <h4>Permissions</h4>
+          <h4>${game.i18n.localize("DICE_LINK.Panel.Permissions")}</h4>
           <div class="dlc-role-toggles">
             ${[1, 2, 3].map(role => `
               <div class="dlc-toggle-row">
@@ -112,7 +113,7 @@ function generateGMPanelContent() {
                   <input type="checkbox" class="dlc-role-toggle" data-role="${role}" ${rolePermissions[role] ? 'checked' : ''}>
                   <span class="dlc-slider"></span>
                 </label>
-                <span class="dlc-toggle-label">${ROLE_NAMES[role]}</span>
+                <span class="dlc-toggle-label">${game.i18n.localize(ROLE_NAME_KEYS[role])}</span>
               </div>
             `).join('')}
             <div class="dlc-toggle-row dlc-disabled">
@@ -120,44 +121,44 @@ function generateGMPanelContent() {
                 <input type="checkbox" checked disabled>
                 <span class="dlc-slider"></span>
               </label>
-              <span class="dlc-toggle-label">GM <em>(always)</em></span>
+              <span class="dlc-toggle-label">${game.i18n.localize(ROLE_NAME_KEYS[4])} <em>${game.i18n.localize("DICE_LINK.Panel.Always")}</em></span>
             </div>
           </div>
         </div>
 
         <!-- Global Override -->
         <div class="dlc-mini-section dlc-mini-compact">
-          <h4>Override</h4>
+          <h4>${game.i18n.localize("DICE_LINK.Panel.Override")}</h4>
           <div class="dlc-role-toggles">
             <div class="dlc-toggle-row">
               <label class="dlc-switch">
                 <input type="checkbox" class="dlc-override-manual" ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL ? 'checked' : ''}>
                 <span class="dlc-slider"></span>
               </label>
-              <span class="dlc-toggle-label">Manual</span>
+              <span class="dlc-toggle-label">${game.i18n.localize("DICE_LINK.Manual")}</span>
             </div>
             <div class="dlc-toggle-row">
               <label class="dlc-switch">
                 <input type="checkbox" class="dlc-override-digital" ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_DIGITAL ? 'checked' : ''}>
                 <span class="dlc-slider"></span>
               </label>
-              <span class="dlc-toggle-label">Digital</span>
+              <span class="dlc-toggle-label">${game.i18n.localize("DICE_LINK.Digital")}</span>
             </div>
           </div>
         </div>
 
         <!-- GM Mode -->
         <div class="dlc-mini-section dlc-mini-compact">
-          <h4>Your Mode</h4>
+          <h4>${game.i18n.localize("DICE_LINK.Panel.YourMode")}</h4>
           <div class="dlc-role-toggles">
             <div class="dlc-toggle-row">
               <label class="dlc-switch dlc-gm-mode-switch">
                 <input type="checkbox" class="dlc-gm-mode-toggle" ${gmMode === PLAYER_MODES.MANUAL ? 'checked' : ''}>
                 <span class="dlc-slider"></span>
               </label>
-              <span class="dlc-toggle-label">${gmMode === PLAYER_MODES.MANUAL ? 'Manual' : 'Digital'}</span>
+              <span class="dlc-toggle-label">${game.i18n.localize(gmMode === PLAYER_MODES.MANUAL ? "DICE_LINK.Manual" : "DICE_LINK.Digital")}</span>
             </div>
-            <button type="button" class="dlc-refresh-icon-btn dlc-refresh-btn" title="Refresh Panel">
+            <button type="button" class="dlc-refresh-icon-btn dlc-refresh-btn" title="${game.i18n.localize("DICE_LINK.Panel.Refresh")}">
               <i class="fas fa-sync-alt"></i>
             </button>
           </div>
@@ -168,17 +169,17 @@ function generateGMPanelContent() {
       <div class="dlc-bottom-sections">
         ${pendingRequests.length > 0 ? `
           <!-- Pending Requests -->
-          ${sectionHTML("pending", collapsedSections.pending, "fa-clock", `Pending Requests (${pendingRequests.length})`, `
+          ${sectionHTML("pending", collapsedSections.pending, "fa-clock", game.i18n.format("DICE_LINK.Panel.PendingRequests", { count: pendingRequests.length }), `
               <div class="dlc-pending-list">
                 ${pendingRequests.map(req => `
                   <div class="dlc-pending-item">
                     <span class="dlc-pending-name">${req.playerName}</span>
                     <div class="dlc-player-actions">
                       <button type="button" class="dlc-btn dlc-btn-sm dlc-btn-success dlc-panel-approve" data-player-id="${req.playerId}">
-                        <i class="fas fa-check"></i> Approve
+                        <i class="fas fa-check"></i> ${game.i18n.localize("DICE_LINK.Approve")}
                       </button>
                       <button type="button" class="dlc-btn dlc-btn-sm dlc-btn-danger dlc-panel-deny" data-player-id="${req.playerId}">
-                        <i class="fas fa-times"></i> Deny
+                        <i class="fas fa-times"></i> ${game.i18n.localize("DICE_LINK.Deny")}
                       </button>
                     </div>
                   </div>
@@ -187,22 +188,20 @@ function generateGMPanelContent() {
         ` : ''}
 
         <!-- Player Modes -->
-        ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", "Player Modes", `
+        ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", game.i18n.localize("DICE_LINK.Panel.PlayerModes"), `
             ${modeLegendHTML(true)}
-            ${players.length > 0 ? `
-              <div class="dlc-players-grid">
-                ${players.map(player => `
-                  <div class="dlc-player-card${player.canRevoke ? ' dlc-player-card-revokable' : ''}">
-                    ${playerInfoHTML(player)}
-                    ${player.canRevoke ? `
-                      <button type="button" class="dlc-revoke-corner dlc-panel-revoke" data-player-id="${player.id}" title="Revoke manual dice">
-                        <i class="fas fa-times"></i>
-                      </button>
-                    ` : ''}
-                  </div>
-                `).join('')}
-              </div>
-            ` : '<p class="dlc-no-players">No players connected.</p>'}`)}
+            <div class="dlc-players-grid">
+              ${players.map(player => `
+                <div class="dlc-player-card${player.canRevoke ? ' dlc-player-card-revokable' : ''}">
+                  ${playerInfoHTML(player)}
+                  ${player.canRevoke ? `
+                    <button type="button" class="dlc-revoke-corner dlc-panel-revoke" data-player-id="${player.id}" title="${game.i18n.localize("DICE_LINK.Panel.RevokeTooltip")}">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>`)}
 
       </div>
     </div>
@@ -238,22 +237,22 @@ function generatePlayerPanelContent() {
       <!-- Bottom Sections -->
       <div class="dlc-bottom-sections">
         <!-- Player Modes - Two Column Layout -->
-        ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", "Player Modes", `
+        ${sectionHTML("playerModes", collapsedSections.playerModes, "fa-users", game.i18n.localize("DICE_LINK.Panel.PlayerModes"), `
             ${modeLegendHTML(false)}
             <div class="dlc-players-grid">
               ${canRequest ? `
                 <button type="button" class="dlc-player-card dlc-player-action-card dlc-btn-success dlc-player-request">
-                  <i class="fas fa-dice"></i> Request Manual
+                  <i class="fas fa-dice"></i> ${game.i18n.localize("DICE_LINK.Panel.RequestManual")}
                 </button>
               ` : ''}
               ${myPending ? `
                 <div class="dlc-player-card dlc-player-pending-card">
-                  <i class="fas fa-clock"></i> Awaiting GM
+                  <i class="fas fa-clock"></i> ${game.i18n.localize("DICE_LINK.Panel.AwaitingGM")}
                 </div>
               ` : ''}
               ${canSwitchToDigital ? `
                 <button type="button" class="dlc-player-card dlc-player-action-card dlc-btn-secondary dlc-player-digital">
-                  <i class="fas fa-desktop"></i> To Digital
+                  <i class="fas fa-desktop"></i> ${game.i18n.localize("DICE_LINK.Panel.ToDigital")}
                 </button>
               ` : ''}
               ${selfPlayer ? `
@@ -268,8 +267,8 @@ function generatePlayerPanelContent() {
               `).join('')}
             </div>
             ${globalOverride !== GLOBAL_OVERRIDE_MODES.INDIVIDUAL ? `
-              <p class="dlc-no-players">
-                <i class="fas fa-lock"></i> GM has set global override: ${globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL ? "All Manual" : "All Digital"}
+              <p class="dlc-override-lock">
+                <i class="fas fa-lock"></i> ${game.i18n.localize(globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL ? "DICE_LINK.Notify.GMSetManual" : "DICE_LINK.Notify.GMSetDigital")}
               </p>
             ` : ''}`)}
 

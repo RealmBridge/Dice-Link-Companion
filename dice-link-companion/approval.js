@@ -27,8 +27,8 @@ export function playerRequestManual() {
 
   if (!overrideAllowsManualRequest(globalOverride)) {
     ui.notifications.warn(globalOverride === GLOBAL_OVERRIDE_MODES.FORCE_ALL_MANUAL
-      ? "Manual dice is already globally forced by the GM."
-      : "Digital dice is globally forced by the GM. Cannot request manual.");
+      ? game.i18n.localize("DICE_LINK.Notify.AlreadyManual")
+      : game.i18n.localize("DICE_LINK.Notify.CantRequest"));
     return;
   }
 
@@ -38,12 +38,12 @@ export function playerRequestManual() {
     playerName: game.user.name
   });
 
-  ui.notifications.info("Manual dice request sent to GM.");
+  ui.notifications.info(game.i18n.localize("DICE_LINK.Notify.RequestSent"));
 }
 
 export function playerSwitchToDigital() {
   if (!overrideAllowsSwitchToDigital()) {
-    ui.notifications.warn("Manual dice is globally forced by the GM. Cannot switch to digital.");
+    ui.notifications.warn(game.i18n.localize("DICE_LINK.Notify.CantSwitch"));
     return;
   }
 
@@ -53,7 +53,7 @@ export function playerSwitchToDigital() {
   });
 
   applyDigitalDice();
-  ui.notifications.info("Switched to digital dice.");
+  ui.notifications.info(game.i18n.localize("DICE_LINK.Notify.SwitchedDigital"));
 }
 
 // ---- The GM: Approve, Deny and Revoke ----
@@ -76,19 +76,19 @@ export function denyManualRequest(playerId) {
 
 async function answerManualRequest(playerId, approved) {
   if (!game.user.isGM) {
-    ui.notifications.error(`Only GMs can ${approved ? "approve" : "deny"} requests.`);
+    ui.notifications.error(game.i18n.localize(approved ? "DICE_LINK.Notify.OnlyGMApprove" : "DICE_LINK.Notify.OnlyGMDeny"));
     return;
   }
 
   const player = game.users.get(playerId);
   if (!player) {
-    ui.notifications.error("Player not found.");
+    ui.notifications.error(game.i18n.localize("DICE_LINK.Notify.PlayerNotFound"));
     return;
   }
 
   // Remove the buttons from every chat card for this player's request
   $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
-    $(this).closest(".dlc-chat-buttons").html(`<em>Request ${approved ? "approved" : "denied"}</em>`);
+    $(this).closest(".dlc-chat-buttons").html(`<em>${game.i18n.localize(approved ? "DICE_LINK.Chat.AnsweredApproved" : "DICE_LINK.Chat.AnsweredDenied")}</em>`);
   });
 
   if (approved) await setPlayerMode(playerId, PLAYER_MODES.MANUAL);
@@ -100,7 +100,7 @@ async function answerManualRequest(playerId, approved) {
   if (approved) emitToPlayers({ action: "applyMode", playerId, mode: PLAYER_MODES.MANUAL });
 
   await createApprovalChatMessage(playerId, player.name, approved);
-  ui.notifications.info(`${approved ? "Approved" : "Denied"} manual dice for ${player.name}.`);
+  ui.notifications.info(game.i18n.format(approved ? "DICE_LINK.Notify.Approved" : "DICE_LINK.Notify.Denied", { name: player.name }));
 }
 
 /**
@@ -117,7 +117,7 @@ export async function revokeManualDice(playerId) {
   // Switch the player's dice back to digital on their own screen
   emitToPlayers({ action: "revokeMode", playerId });
 
-  ui.notifications.info(`Revoked manual dice for ${player.name}.`);
+  ui.notifications.info(game.i18n.format("DICE_LINK.Notify.Revoked", { name: player.name }));
 }
 
 // ---- The other screens: what arrives from the player or the GM ----
@@ -133,7 +133,7 @@ async function receiveManualRequest({ playerId, playerName }) {
   }
 
   await createRequestChatMessage(playerId, playerName);
-  ui.notifications.warn(`${playerName} requested manual dice mode.`);
+  ui.notifications.warn(game.i18n.format("DICE_LINK.Notify.PlayerRequested", { name: playerName }));
 }
 
 /** A player switched back to digital: the GM's screen saves it (players can't save it). */
@@ -141,18 +141,18 @@ async function receiveSwitchToDigital({ playerId }) {
   if (game.user.isGM) await setPlayerMode(playerId, PLAYER_MODES.DIGITAL);
 }
 
-/** The GM approved this player's request: switch their dice over. */
+/** The GM approved this player's request: switch their dice over to manual. */
 function receiveApproval({ playerId, mode }) {
   if (playerId !== game.user.id) return;
   applyMode(mode);
-  ui.notifications.info(mode === PLAYER_MODES.MANUAL ? "Manual dice mode activated!" : "Digital dice mode activated!");
+  ui.notifications.info(game.i18n.localize("DICE_LINK.Notify.ManualOn"));
 }
 
 /** The GM revoked this player's manual dice: back to digital. */
 function receiveRevoke({ playerId }) {
   if (playerId !== game.user.id) return;
   applyDigitalDice();
-  ui.notifications.warn("GM has revoked your manual dice mode.");
+  ui.notifications.warn(game.i18n.localize("DICE_LINK.Notify.BackToDigital"));
 }
 
 // ---- Setup ----

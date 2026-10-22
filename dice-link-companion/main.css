@@ -597,10 +597,11 @@
   color: var(--dlc-text-primary);
 }
 
-/* ---- No players message ---- */
-.dlc-no-players {
+/* ---- The player panel's line saying the GM has set everyone's dice ---- */
+.dlc-override-lock {
   text-align: center;
   padding: 20px;
+  margin-top: 10px;
   color: var(--dlc-text-muted);
   font-style: italic;
   font-size: 12px;
@@ -714,11 +715,6 @@
    a little tighter */
 .dlc-player-panel .dlc-bottom-sections {
   padding-top: 12px;
-}
-
-/* The player panel's "GM has set global override" line */
-.dlc-player-panel .dlc-no-players {
-  margin-top: 10px;
 }
 
 .dlc-player-panel .dlc-players-grid {

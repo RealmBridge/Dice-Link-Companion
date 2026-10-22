@@ -26,7 +26,7 @@ export function setupDiceMethod() {
   // Register "dice-link" as an interactive method that uses Foundry's default resolver
   // Our dialog hooks will hide the resolver and ask DLA for the dice
   CONFIG.Dice.fulfillment.methods["dice-link"] = {
-    label: "Dice Link Companion",
+    label: "DICE_LINK.Title",   // Foundry looks the key up in en.json
     icon: "fa-dice-d20",
     interactive: true
     // No custom resolver - we use Foundry's default RollResolver instead

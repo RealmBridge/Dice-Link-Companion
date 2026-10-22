@@ -27,7 +27,7 @@ Hooks.on("getSceneControlButtons", (controls) => {
 
   controls.tokens.tools.diceLinkCompanion = {
     name: "diceLinkCompanion",
-    title: "Dice Link Companion",
+    title: "DICE_LINK.Title",   // Foundry looks the key up in en.json
     icon: "fa-solid fa-dice-d20",
     button: true,
     visible: true,
@@ -79,8 +79,8 @@ Hooks.once("ready", async () => {
     setupBreaks();
 
     // Connect to DLA, if Foundry is running inside the Dice Link App (without it DLC still
-    // runs: the panel, manual dice typed into Foundry, and so on). The "Connected to Dice
-    // Link App" notice comes from the connection change below.
+    // runs: the panel, manual dice typed into Foundry, and so on). The "Connected" notice
+    // comes from the connection change below.
     connectToDLA();
 
     // Handle connection status changes
@@ -88,7 +88,7 @@ Hooks.once("ready", async () => {
       debug("Dice Link App connection status:", connected ? "connected" : "disconnected");
       applyModeForConnection(connected);
       if (connected) {
-        ui.notifications?.info("Connected to Dice Link App");
+        ui.notifications?.info(game.i18n.localize("DICE_LINK.Notify.Connected"));
         sendInitialChatHistory();
         setTimeout(sendPlayerModesToDLA, 100);
       }

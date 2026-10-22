@@ -105,6 +105,6 @@ async function onDiceTrayRoll(formula, flavor) {
   } catch (e) {
     debugError("Roll error:", e.message);
     if (e.message?.includes("cancelled")) return;   // cancelled in DLA: nothing to report
-    ui.notifications?.error(`Dice roll error: ${e.message}`);
+    ui.notifications?.error(game.i18n.format("DICE_LINK.Notify.RollError", { error: e.message }));
   }
 }

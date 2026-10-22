@@ -1,8 +1,8 @@
 {
   "id": "dice-link-companion",
   "title": "Dice Link Companion",
-  "description": "When activated, overrides dice configuration to manual input. When deactivated, returns to digital roll.",
-  "version": "1.0.10.14",
+  "description": "Connects Foundry to Dice Link so players can roll their own real dice.",
+  "version": "1.0.10.15",
   "compatibility": {
     "minimum": "13",
     "verified": "14",

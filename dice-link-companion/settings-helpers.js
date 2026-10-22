@@ -3,7 +3,7 @@
  * GM panel's Permissions switches): reading it, and turning it on or off for a role.
  */
 
-import { ROLE_NAMES } from "./constants.js";
+import { ROLE_NAME_KEYS } from "./constants.js";
 
 /** Whether each role (1-3) has Foundry's manual rolls permission, e.g. { 1: true, 2: false, 3: false }. */
 export function getManualRollsPermissions() {
@@ -59,7 +59,7 @@ export async function setManualRollsPermission(role, enabled) {
     
     return true;
   } catch (e) {
-    ui.notifications.error(`Failed to update permission for ${ROLE_NAMES[role]}.`);
+    ui.notifications.error(game.i18n.format("DICE_LINK.Notify.RoleFailed", { role: game.i18n.localize(ROLE_NAME_KEYS[role]) }));
     return false;
   }
 }

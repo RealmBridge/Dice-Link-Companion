@@ -1,7 +1,8 @@
 /**
  * constants.js - the fixed values every other DLC script uses: the module's ID, the
  * debug switch, branding, timings, the player and override mode names, setting
- * defaults and Foundry's role names. Imports nothing from DLC, so any script can use it.
+ * defaults and the language keys of Foundry's role names. Imports nothing from DLC, so
+ * any script can use it.
  */
 
 // Debug switch - set to false to silence all DLC console logging
@@ -41,9 +42,11 @@ export const SETTING_DEFAULTS = {
   }
 };
 
-// Foundry's player roles the GM panel's Permissions switches cover (the GM always has it)
-export const ROLE_NAMES = {
-  1: "Player",
-  2: "Trusted Player",
-  3: "Assistant GM"
+// The GM panel's Permissions switches: Foundry's player roles 1-3 (the GM, 4, always has
+// it), each named by Foundry's own language key, so the name is Foundry's wording
+export const ROLE_NAME_KEYS = {
+  1: "USER.RolePlayer",
+  2: "USER.RoleTrusted",
+  3: "USER.RoleAssistant",
+  4: "USER.RoleGamemaster"
 };
