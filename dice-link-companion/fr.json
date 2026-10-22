@@ -28,7 +28,7 @@
 
     "Notify": {
       "Connected": "Connecté à Dice Link.",
-      "RollError": "Erreur de lancer de dés : {error}",
+      "RollError": "Erreur du lancer de dés : {error}",
 
       "RequestSent": "Demande de dés manuels envoyée au MJ.",
       "AlreadyManual": "Le MJ a déjà passé tout le monde en dés manuels.",
@@ -69,7 +69,7 @@
     },
 
     "Break": {
-      "Title": "La partie est en pause",
+      "Title": "La session de jeu est en pause",
       "Players": "Joueurs",
       "Back": "Je suis de retour !",
       "Away": "Je m'absente",
