@@ -11,7 +11,7 @@ import { registerCoreSettings, registerPlayerModeSettings, registerPlayerModeSet
 import { setupApprovalButtons } from "./approval.js";
 import { setupSocketListeners } from "./socket.js";
 import { setupDiceMethod, applyStartingMode, applyModeForConnection } from "./mode-application.js";
-import { setupDialogMirroring } from "./dialog-mirroring.js";
+import { setupDiceEntryWindow } from "./dice-entry-window.js";
 import { setupChatLog, sendInitialChatHistory } from "./chat-log.js";
 import { debug, debugError, installErrorDiagnostics } from "./debug.js";
 import { openPanel, setupPanelMessages, sendPlayerModesToDLA, modesChanged } from "./dice-panel.js";
@@ -71,7 +71,7 @@ Hooks.once("ready", async () => {
     setupSocketListeners();
     setupApprovalButtons();
     setupPanelMessages();
-    setupDialogMirroring();
+    setupDiceEntryWindow();
     setupChatLog();
     setupDiceMethod();
     setupDiceFulfillment();

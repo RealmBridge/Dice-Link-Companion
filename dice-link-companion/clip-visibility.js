@@ -3,8 +3,8 @@
  * The rules only; video-feed.js asks them, sending this player's clip and showing the
  * other players' clips.
  *
- * The roll's visibility (Foundry v14 "messageMode", or the "Roll Mode" picked in the
- * roll's own dialog) decides who sees the clip:
+ * The chat visibility (Foundry v14 "messageMode", which DLA's Public / Whisper / Self
+ * only / GM only buttons set) decides who sees the clip:
  *
  *   Who rolls | Visibility          | Who sees the clip
  *   ----------+---------------------+------------------------------------------

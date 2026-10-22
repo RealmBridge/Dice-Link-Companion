@@ -23,7 +23,6 @@ function logger(label, method = "log") {
 export const debug = logger("[Dice Link Debug]");
 export const debugError = logger("[Dice Link Debug]", "error");
 export const debugResolverState = logger("[Dice Link Resolver State]");  // Foundry's dice resolver
-export const debugRollWindow = logger("[Dice Link Roll Window]");        // roll windows passed to DLA
 export const debugQWebChannel = logger("[Dice Link QWebChannel]");       // the link to DLA
 export const debugCamera = logger("[Dice Link Camera]");                 // dice clips
 export const debugChatLog = logger("[Dice Link Chat Log]");              // the chat copy in DLA

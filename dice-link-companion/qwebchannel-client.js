@@ -18,7 +18,6 @@ let connectionChangeCallbacks = [];
 const FROM_DLA = {
   rollCancelled:    { signal: "rollCancelledReady",    unpack: m => [m.id || m.originalRollId] },
   diceResult:       { signal: "diceResultReady",       unpack: m => [m.originalRollId || m.id, m.results || []] },
-  buttonSelect:     { signal: "buttonSelectReady",     unpack: m => [m.id || m.originalRollId, m.button || "normal", m.configChanges || {}] },
   diceTrayRoll:     { signal: "diceTrayRollReady",     unpack: m => [m.formula, m.flavor] },
   playerModeAction: { signal: "playerModeActionReady", unpack: m => [m] },   // GM's Approve / Deny in DLA's player list
   chatInteraction:  { signal: "chatInteractionReady",  unpack: m => [m] },   // a click on a chat card in DLA
@@ -34,7 +33,6 @@ const handlers = {};
 
 // Every message DLC sends DLA: its type, and the DLA receiver that takes it
 const TO_DLA = {
-  rollRequest: "receiveRollRequest",
   diceRequest: "receiveDiceRequest",
   playerModesUpdate: "receivePlayerModesUpdate",
   chatMessage: "receiveChatMessage",

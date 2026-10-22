@@ -231,12 +231,8 @@ function encodeSelfStreamWebP(callback, quality = 0.9) {
 
 // ---- This player's own clip, from DLA ----
 //
-// Who may see it (clip-visibility.js has the rules): the roll's own dialog may pick a
-// "Roll Mode" for that one roll; by the time the clip starts, Foundry has replaced that
-// dialog with the dice resolver, so dice-fulfillment.js notes it when the DLA button is
-// pressed. Rolls without one use the chat visibility setting (the one DLA's Public /
-// Whisper / Self only / GM only buttons set).
-let rollClipVisibility = null;   // this roll's visibility from its dialog, if it had one
+// Who may see it (clip-visibility.js has the rules) follows the chat visibility setting:
+// the one DLA's Public / Whisper / Self only / GM only buttons set.
 let clipActive = false;          // a clip is being sent right now
 let clipVisibility = null;       // locked when each clip starts
 let clipToOthers = true;         // whether this clip goes to the other players at all
@@ -247,22 +243,6 @@ let clipToOthers = true;         // whether this clip goes to the other players 
 // further stop to clear it. Setting it on stream-end makes any in-flight straggler
 // frame drop its broadcast, so cameraStreamEnd is always the last message sent.
 let localBroadcastEnded = false;
-
-/**
- * A roll's button was pressed in DLA: its clip follows the "Roll Mode" picked in its
- * dialog (null if it had none: the chat visibility then decides), and the next frame
- * starts a new clip.
- * @param {string|null} visibility - public / gm / blind / self
- */
-export function setRollClipVisibility(visibility) {
-  rollClipVisibility = visibility;
-  clipActive = false;
-}
-
-/** The roll is over (its dice values came, or it was cancelled): its own Roll Mode no longer applies. */
-export function clearRollClipVisibility() {
-  rollClipVisibility = null;
-}
 
 /**
  * Take this player's clip from DLA: show it, and send it to the other players allowed to
@@ -277,7 +257,7 @@ export function setupDiceClips() {
     if (!clipActive) {
       // First frame of a new clip: lock who may see it for the whole clip.
       clipActive = true;
-      clipVisibility = rollClipVisibility || currentChatVisibility();
+      clipVisibility = currentChatVisibility();
       clipToOthers = clipGoesToOthers(clipVisibility, game.user.isGM);
       debug("Dice clip visibility", { visibility: clipVisibility || "public", rollerIsGM: game.user.isGM, sentToOthers: clipToOthers });
     }

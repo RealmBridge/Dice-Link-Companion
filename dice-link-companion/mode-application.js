@@ -18,8 +18,7 @@ import { debugResolverState } from "./debug.js";
 /**
  * Setup Dice Link as a fulfillment method. Called from main.mjs setup.
  * There is no resolver of our own: Foundry's own RollResolver is used, and
- * dialog-mirroring.js hides it and asks DLA for the dice, the same way as for the roll's
- * options dialog.
+ * dice-entry-window.js hides it and asks DLA for the dice.
  */
 export function setupDiceMethod() {
   debugResolverState("setup_fulfillment_starting", {});
@@ -87,7 +86,7 @@ function restoreDSN() {
 /**
  * Apply manual dice mode: Dice Link becomes Foundry's default fulfillment method, so
  * Foundry shows its RollResolver. When DLA is connected, DLA fills values; when not,
- * readOnly is stripped in dialog-mirroring.js so the user can type directly.
+ * readOnly is stripped in dice-entry-window.js so the user can type directly.
  * (Foundry uses this default for every die the player hasn't set a method for in
  * Foundry's own Dice Configuration.)
  */
