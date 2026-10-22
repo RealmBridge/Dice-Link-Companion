@@ -1,0 +1,80 @@
+{
+  "DICE_LINK": {
+    "Title": "Dice Link Companion",
+    "Manual": "Manuell",
+    "Digital": "Digital",
+    "Approve": "Genehmigen",
+    "Deny": "Ablehnen",
+
+    "Panel": {
+      "LogoTooltip": "Realm Bridge besuchen",
+      "LogoAlt": "Realm Bridge",
+      "Settings": "Einstellungen",
+      "Permissions": "Berechtigungen",
+      "Always": "(immer)",
+      "Override": "Erzwingen",
+      "YourMode": "Dein Modus",
+      "Refresh": "Panel aktualisieren",
+      "PendingRequests": "Offene Anfragen ({count})",
+      "PlayerModes": "Spielermodi",
+      "Pending": "Ausstehend",
+      "Revoke": "Entziehen",
+      "RevokeTooltip": "Manuelle Würfel entziehen",
+      "You": "(Du)",
+      "RequestManual": "Manuelle Würfel anfragen",
+      "AwaitingGM": "Warten auf SL",
+      "ToDigital": "Zu Digital wechseln"
+    },
+
+    "Notify": {
+      "Connected": "Mit Dice Link verbunden.",
+      "RollError": "Fehler beim Würfeln: {error}",
+
+      "RequestSent": "Anfrage für manuelle Würfel an den SL gesendet.",
+      "AlreadyManual": "Der SL hat bereits alle auf manuelle Würfel gestellt.",
+      "CantRequest": "Der SL hat alle auf digitale Würfel gestellt, daher kannst du keine manuellen Würfel anfragen.",
+      "CantSwitch": "Der SL hat alle auf manuelle Würfel gestellt, daher kannst du nicht zu digitalen Würfeln wechseln.",
+      "SwitchedDigital": "Zu digitalen Würfeln gewechselt.",
+      "ManualOn": "Manuelle Würfel aktiviert!",
+      "BackToDigital": "Der SL hat dich wieder auf digitale Würfel gestellt.",
+      "GMSetManual": "Der SL hat alle auf manuelle Würfel gestellt.",
+      "GMSetDigital": "Der SL hat alle auf digitale Würfel gestellt.",
+      "ChooseOwn": "Alle können ihren Würfelmodus wieder selbst wählen.",
+
+      "PlayerRequested": "{name} hat manuelle Würfel angefragt.",
+      "Approved": "Manuelle Würfel für {name} genehmigt.",
+      "Denied": "Manuelle Würfel für {name} abgelehnt.",
+      "Revoked": "Manuelle Würfel für {name} entzogen.",
+      "RoleEnabled": "Manuelle Würfe für {role} aktiviert.",
+      "RoleDisabled": "Manuelle Würfe für {role} deaktiviert.",
+      "RoleFailed": "Berechtigung für {role} konnte nicht geändert werden.",
+      "PanelRefreshed": "Panel aktualisiert.",
+      "AllManual": "Alle nutzen jetzt manuelle Würfel.",
+      "AllDigital": "Alle nutzen jetzt digitale Würfel.",
+      "YourDiceManual": "Deine Würfel: manuell",
+      "YourDiceDigital": "Deine Würfel: digital",
+      "OnlyGMApprove": "Nur die Spielleitung kann Anfragen genehmigen.",
+      "OnlyGMDeny": "Nur die Spielleitung kann Anfragen ablehnen.",
+      "PlayerNotFound": "Spieler nicht gefunden."
+    },
+
+    "Chat": {
+      "Requesting": "{name} bittet um manuelle Würfel.",
+      "AnsweredApproved": "Anfrage genehmigt",
+      "AnsweredDenied": "Anfrage abgelehnt",
+      "RequestSent": "Deine Anfrage für manuelle Würfel wurde an den SL gesendet.",
+      "Result": "Die Anfrage von {name} für manuelle Würfel wurde {status}.",
+      "ResultApproved": "GENEHMIGT",
+      "ResultDenied": "ABGELEHNT"
+    },
+
+    "Break": {
+      "Title": "Die Runde macht Pause",
+      "Players": "Spieler",
+      "Back": "Ich bin wieder da!",
+      "Away": "Ich bin kurz weg",
+      "End": "Pause beenden",
+      "Over": "PAUSE VORBEI"
+    }
+  }
+}

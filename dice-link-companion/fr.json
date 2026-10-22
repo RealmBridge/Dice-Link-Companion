@@ -1,0 +1,80 @@
+{
+  "DICE_LINK": {
+    "Title": "Dice Link Companion",
+    "Manual": "Manuel",
+    "Digital": "Numérique",
+    "Approve": "Approuver",
+    "Deny": "Refuser",
+
+    "Panel": {
+      "LogoTooltip": "Visiter le site de Realm Bridge",
+      "LogoAlt": "Realm Bridge",
+      "Settings": "Paramètres",
+      "Permissions": "Permissions",
+      "Always": "(toujours)",
+      "Override": "Imposer",
+      "YourMode": "Votre mode",
+      "Refresh": "Actualiser le panneau",
+      "PendingRequests": "Demandes en attente ({count})",
+      "PlayerModes": "Modes des joueurs",
+      "Pending": "En attente",
+      "Revoke": "Retirer",
+      "RevokeTooltip": "Retirer les dés manuels",
+      "You": "(Vous)",
+      "RequestManual": "Demander les dés manuels",
+      "AwaitingGM": "En attente du MJ",
+      "ToDigital": "Passer en numérique"
+    },
+
+    "Notify": {
+      "Connected": "Connecté à Dice Link.",
+      "RollError": "Erreur de lancer de dés : {error}",
+
+      "RequestSent": "Demande de dés manuels envoyée au MJ.",
+      "AlreadyManual": "Le MJ a déjà passé tout le monde en dés manuels.",
+      "CantRequest": "Le MJ a passé tout le monde en dés numériques, vous ne pouvez donc pas demander les dés manuels.",
+      "CantSwitch": "Le MJ a passé tout le monde en dés manuels, vous ne pouvez donc pas passer en numérique.",
+      "SwitchedDigital": "Dés numériques activés.",
+      "ManualOn": "Mode dés manuels activé !",
+      "BackToDigital": "Le MJ a remis vos dés en numérique.",
+      "GMSetManual": "Le MJ a passé tout le monde en dés manuels.",
+      "GMSetDigital": "Le MJ a passé tout le monde en dés numériques.",
+      "ChooseOwn": "Chacun peut à nouveau choisir son mode de dés.",
+
+      "PlayerRequested": "{name} a demandé les dés manuels.",
+      "Approved": "Dés manuels accordés à {name}.",
+      "Denied": "Dés manuels refusés à {name}.",
+      "Revoked": "Dés manuels retirés à {name}.",
+      "RoleEnabled": "Jets manuels activés pour le rôle {role}.",
+      "RoleDisabled": "Jets manuels désactivés pour le rôle {role}.",
+      "RoleFailed": "Impossible de modifier la permission du rôle {role}.",
+      "PanelRefreshed": "Panneau actualisé.",
+      "AllManual": "Tout le monde est maintenant en dés manuels.",
+      "AllDigital": "Tout le monde est maintenant en dés numériques.",
+      "YourDiceManual": "Vos dés : manuels",
+      "YourDiceDigital": "Vos dés : numériques",
+      "OnlyGMApprove": "Seuls les MJ peuvent approuver les demandes.",
+      "OnlyGMDeny": "Seuls les MJ peuvent refuser les demandes.",
+      "PlayerNotFound": "Joueur introuvable."
+    },
+
+    "Chat": {
+      "Requesting": "{name} demande à passer en dés manuels.",
+      "AnsweredApproved": "Demande approuvée",
+      "AnsweredDenied": "Demande refusée",
+      "RequestSent": "Votre demande de dés manuels a été envoyée au MJ.",
+      "Result": "La demande de {name} pour les dés manuels a été {status}.",
+      "ResultApproved": "APPROUVÉE",
+      "ResultDenied": "REFUSÉE"
+    },
+
+    "Break": {
+      "Title": "La partie est en pause",
+      "Players": "Joueurs",
+      "Back": "Je suis de retour !",
+      "Away": "Je m'absente",
+      "End": "Terminer la pause",
+      "Over": "PAUSE TERMINÉE"
+    }
+  }
+}

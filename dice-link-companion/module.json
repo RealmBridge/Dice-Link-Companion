@@ -2,7 +2,7 @@
   "id": "dice-link-companion",
   "title": "Dice Link Companion",
   "description": "Connects Foundry to Dice Link so players can roll their own real dice.",
-  "version": "1.0.10.15",
+  "version": "1.0.10.16",
   "compatibility": {
     "minimum": "13",
     "verified": "14",
@@ -28,6 +28,16 @@
       "lang": "en",
       "name": "English",
       "path": "en.json"
+    },
+    {
+      "lang": "fr",
+      "name": "Français",
+      "path": "fr.json"
+    },
+    {
+      "lang": "de",
+      "name": "Deutsch",
+      "path": "de.json"
     }
   ],
   "socket": true,
