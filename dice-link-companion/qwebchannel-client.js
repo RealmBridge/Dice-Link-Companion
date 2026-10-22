@@ -1,10 +1,11 @@
 /**
  * qwebchannel-client.js - DLC's link to the Dice Link App (DLA). DLA shows Foundry in its
  * own built-in browser and offers "dlaInterface" through Qt's QWebChannel. This script
- * finds it, announces DLC, answers DLA's connection checks, passes every message from DLA
- * to the DLC script that registered for it, and sends DLC's messages to DLA.
+ * finds it, announces DLC and its version, answers DLA's connection checks, passes every
+ * message from DLA to the DLC script that registered for it, and sends DLC's messages to DLA.
  */
 
+import { MODULE_ID } from "./constants.js";
 import { debugQWebChannel, debugError } from "./debug.js";
 
 let isConnected = false;
@@ -152,6 +153,10 @@ function setupDLAInterface(dlaIface) {
         }
       });
     }
+
+    // Tell DLA which version of DLC this is, so DLA can check DLC is new enough
+    // (an older DLA has no receiver for it, and isn't told)
+    dlaInterface.receiveDLCVersion?.(game.modules.get(MODULE_ID)?.version ?? "");
 
     // Notify all listeners that connection established
     notifyConnectionChange(true);
