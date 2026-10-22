@@ -4,14 +4,23 @@
  * in every game system, so it is recognised by what it is, never by its title or words.
  * With DLA connected: hides it and asks DLA for the dice it needs (dice-fulfillment.js
  * hands DLA's values back to it). Without DLA: unlocks its boxes so the player can type
- * their dice values in. The game system's own roll windows (Advantage / Normal /
- * Disadvantage and the like) are left alone: the player answers them in Foundry.
+ * their dice values in. Either way it keeps watching the window until the roll finishes,
+ * for a die Foundry adds partway through (a reroll or an exploding die). The game
+ * system's own roll windows (Advantage / Normal / Disadvantage and the like) are left
+ * alone: the player answers them in Foundry.
  */
 
 import { isUserInManualMode } from "./settings.js";
 import { debug } from "./debug.js";
 import { getConnectionStatus, sendMessage } from "./qwebchannel-client.js";
 import { getDiceEntryWindow, setDiceEntryWindow, clearRollState } from "./state-management.js";
+
+// Die boxes already dealt with (asked DLA for, or unlocked), so each is dealt with once
+const handledBoxes = new WeakSet();
+
+// Watches the window while its roll is in progress: when Foundry needs another die
+// partway through the roll, it adds a box to the open window without redrawing it
+let watched = null;   // { app, observer }
 
 // ---- Setup ----
 
@@ -22,8 +31,9 @@ import { getDiceEntryWindow, setDiceEntryWindow, clearRollState } from "./state-
 export function setupDiceEntryWindow() {
   Hooks.on("renderRollResolver", onDiceEntryWindow);
 
-  // The window closed (the roll finished, or was cancelled): forget it
+  // The window closed (the roll finished, or was cancelled): stop watching it and forget it
   Hooks.on("closeRollResolver", (app) => {
+    if (watched?.app === app) stopWatching();
     if (getDiceEntryWindow() === app) clearRollState();
   });
 }
@@ -52,26 +62,14 @@ export function emptyDieBoxes(app) {
 
 /**
  * Foundry's dice entry window opened (or redrew, e.g. for dice added to the roll). In
- * manual mode: with DLA, hide it and ask DLA for the dice; without DLA, let the player
- * type them in.
+ * manual mode: with DLA, hide it; then deal with its boxes, and keep watching it for
+ * boxes added later.
  */
 function onDiceEntryWindow(app) {
   if (!isUserInManualMode()) return;
-  const boxes = emptyDieBoxes(app);
-
-  if (!getConnectionStatus()) {
-    // Foundry locks the boxes of Dice Link's dice (it expects DLA to fill them): unlock them
-    for (const { input } of boxes) {
-      input.readOnly = false;
-      input.removeAttribute("readonly");
-    }
-    return;
-  }
-
-  hideWindow(app.element);
-  if (!boxes.length) return;   // a redraw with nothing new to ask for
-  setDiceEntryWindow(app);
-  askDLAForDice(boxes);
+  if (getConnectionStatus()) hideWindow(app.element);
+  if (watched?.app !== app) watchWindow(app);
+  dealWithNewBoxes(app);
 }
 
 /**
@@ -82,6 +80,41 @@ function hideWindow(element) {
   if (element?.style) {
     element.style.visibility = "hidden";
     element.style.pointerEvents = "none";
+  }
+}
+
+/** Keep the window as the roll in progress, and watch it for boxes Foundry adds later. */
+function watchWindow(app) {
+  stopWatching();
+  setDiceEntryWindow(app);
+  const observer = new MutationObserver(() => dealWithNewBoxes(app));
+  observer.observe(app.element, { childList: true, subtree: true });
+  watched = { app, observer };
+}
+
+function stopWatching() {
+  watched?.observer.disconnect();
+  watched = null;
+}
+
+/**
+ * Deal with the window's empty boxes that haven't been dealt with yet: with DLA, ask DLA
+ * for those dice; without DLA, unlock them so the player can type their values in.
+ */
+function dealWithNewBoxes(app) {
+  const boxes = emptyDieBoxes(app).filter(({ input }) => !handledBoxes.has(input));
+  if (!boxes.length) return;
+  boxes.forEach(({ input }) => handledBoxes.add(input));
+
+  if (getConnectionStatus()) {
+    askDLAForDice(boxes);
+    return;
+  }
+
+  // Foundry locks the boxes of Dice Link's dice (it expects DLA to fill them): unlock them
+  for (const { input } of boxes) {
+    input.readOnly = false;
+    input.removeAttribute("readonly");
   }
 }
 

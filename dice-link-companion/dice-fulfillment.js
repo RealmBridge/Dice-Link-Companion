@@ -58,7 +58,8 @@ function onDiceResult(rollId, results) {
   if (submit && !submit.disabled) app.element.requestSubmit(submit);
   else if (!submit) debugError("No submit button in the dice entry window - the roll will not complete", describe(app.element.querySelectorAll("button")));
 
-  clearRollState();
+  // The window stays the roll in progress until it closes: Foundry may still ask for
+  // another die (a reroll or an exploding die), and dice-entry-window.js asks DLA for it
 }
 
 // ---- A roll cancelled in DLA ----
