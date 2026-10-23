@@ -28,7 +28,6 @@
 
     "Notify": {
       "Connected": "Mit Dice Link verbunden.",
-      "RollError": "Fehler beim Würfeln: {error}",
 
       "RequestSent": "Anfrage für manuelle Würfel an den SL gesendet.",
       "AlreadyManual": "Der SL hat bereits alle auf manuelle Würfel gestellt.",

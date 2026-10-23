@@ -28,7 +28,6 @@
 
     "Notify": {
       "Connected": "Connected to Dice Link.",
-      "RollError": "Dice roll error: {error}",
 
       "RequestSent": "Manual dice request sent to the GM.",
       "AlreadyManual": "The GM has already set everyone to manual dice.",

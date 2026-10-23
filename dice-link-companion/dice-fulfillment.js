@@ -1,9 +1,9 @@
 /**
  * dice-fulfillment.js - DLA's side of each roll, carried out in Foundry: hands the dice
- * values DLA sends to Foundry's dice entry window, closes that window for a roll cancelled
- * in DLA, and runs rolls from DLA's dice tray. Hiding the dice entry window, and asking
- * DLA for its dice, is done by dice-entry-window.js; switching a user's dice to manual or
- * digital is done by mode-application.js.
+ * values DLA sends to Foundry's dice entry window, and closes that window for a roll
+ * cancelled in DLA. Hiding the dice entry window, and asking DLA for its dice, is done by
+ * dice-entry-window.js; switching a user's dice to manual or digital is done by
+ * mode-application.js.
  */
 
 import { debug, debugError, describe, patchResolverForDiagnostics } from "./debug.js";
@@ -19,7 +19,6 @@ import { onDLAMessage } from "./qwebchannel-client.js";
 export function setupDiceFulfillment() {
   onDLAMessage("diceResult", onDiceResult);
   onDLAMessage("rollCancelled", onRollCancelled);
-  onDLAMessage("diceTrayRoll", onDiceTrayRoll);
 }
 
 // ---- The dice values from DLA ----
@@ -83,28 +82,4 @@ function onRollCancelled(rollId) {
   }
 
   clearRollState();
-}
-
-// ---- Dice tray rolls ----
-
-/**
- * DLA's dice tray started a roll. Run the formula with Foundry's own Roll.evaluate(); this
- * triggers the normal flow (Foundry shows its dice entry window, dice-entry-window.js hides
- * it and asks DLA for the dice, and so on), then the roll goes to chat.
- */
-async function onDiceTrayRoll(formula, flavor) {
-  debug("Dice tray roll from DLA", { formula, flavor });
-
-  try {
-    const roll = new Roll(formula);
-    await roll.evaluate();
-    await roll.toMessage({
-      speaker: ChatMessage.getSpeaker(),
-      flavor
-    });
-  } catch (e) {
-    debugError("Roll error:", e.message);
-    if (e.message?.includes("cancelled")) return;   // cancelled in DLA: nothing to report
-    ui.notifications?.error(game.i18n.format("DICE_LINK.Notify.RollError", { error: e.message }));
-  }
 }

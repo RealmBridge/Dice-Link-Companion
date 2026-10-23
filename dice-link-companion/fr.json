@@ -28,7 +28,6 @@
 
     "Notify": {
       "Connected": "Connecté à Dice Link.",
-      "RollError": "Erreur du lancer de dés : {error}",
 
       "RequestSent": "Demande de dés manuels envoyée au MJ.",
       "AlreadyManual": "Le MJ a déjà passé tout le monde en dés manuels.",
