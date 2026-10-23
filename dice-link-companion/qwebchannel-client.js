@@ -47,8 +47,9 @@ const TO_DLA = {
 /**
  * Connect to DLA. Called from main.mjs at start-up.
  * DLC makes the first contact: it waits for DLA's dlaInterface to appear in the page,
- * tells DLA it has loaded (dlcModuleInitialized), and DLA answers (dlcModuleReady). Going
- * this way round means no message from DLA can arrive before DLC is listening.
+ * listens for DLA's answer (dlcModuleReady), then tells DLA it has loaded
+ * (dlcModuleInitialized). Going this way round means no message from DLA can arrive before
+ * DLC is listening.
  * @returns {Promise<boolean>} True if connected to DLA
  */
 export async function connect() {
@@ -81,38 +82,37 @@ export async function connect() {
 /** Tell DLA that DLC has loaded, and wait for its answer (true once connected). */
 async function announceDLCReady(dlaIface) {
   try {
-    // Tell DLA that DLC has loaded
-    if (typeof dlaIface.dlcModuleInitialized === "function") {
-      dlaIface.dlcModuleInitialized();
-    } else {
+    if (typeof dlaIface.dlcModuleInitialized !== "function") {
       debugError("dlcModuleInitialized is NOT a function", {
         type: typeof dlaIface.dlcModuleInitialized,
         availableKeys: Object.keys(dlaIface)
       });
       return false;
     }
+    if (!dlaIface.dlcModuleReady) {
+      debugError("dlcModuleReady signal NOT FOUND on dlaInterface", {});
+      return false;
+    }
 
-    // Wait for DLA's acknowledgement via dlcModuleReady signal
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         debugError("dlcModuleReady signal TIMEOUT - DLA did not acknowledge", {});
         resolve(false);
       }, 5000);
 
-      if (dlaIface.dlcModuleReady) {
-        dlaIface.dlcModuleReady.connect(function(ackJson) {
-          clearTimeout(timeout);
-          debugQWebChannel("DLA answered: connected", { ackJson });
-
-          // Setup the interface after DLA acknowledges
-          const setupSuccess = setupDLAInterface(dlaIface);
-          resolve(setupSuccess);
-        });
-      } else {
+      // Listen for DLA's answer FIRST: Qt only sends DLA's answer to a page that is
+      // already listening for it.
+      dlaIface.dlcModuleReady.connect(function(ackJson) {
         clearTimeout(timeout);
-        debugError("dlcModuleReady signal NOT FOUND on dlaInterface", {});
-        resolve(false);
-      }
+        debugQWebChannel("DLA answered: connected", { ackJson });
+
+        // Setup the interface after DLA acknowledges
+        const setupSuccess = setupDLAInterface(dlaIface);
+        resolve(setupSuccess);
+      });
+
+      // Then tell DLA that DLC has loaded
+      dlaIface.dlcModuleInitialized();
     });
   } catch (error) {
     debugError("Exception in announceDLCReady", { message: error.message, stack: error.stack });
