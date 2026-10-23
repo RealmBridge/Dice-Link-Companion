@@ -140,7 +140,6 @@ export function sendPlayerModesToDLA() {
   sendMessage({
     type: "playerModesUpdate",
     players,
-    globalOverride: globalOverride || null,
     worldId: game.world.id,
     worldTitle: game.world.title
   });
