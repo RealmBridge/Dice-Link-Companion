@@ -8,6 +8,7 @@
 import { PLAYER_MODES, GLOBAL_OVERRIDE_MODES } from "./constants.js";
 import { debug } from "./debug.js";
 import {
+  getPlayerMode,
   setPlayerMode,
   getGlobalOverride,
   getPendingRequests,
@@ -32,11 +33,7 @@ export function playerRequestManual() {
     return;
   }
 
-  emitToPlayers({
-    action: "playerRequestManual",
-    playerId: game.user.id,
-    playerName: game.user.name
-  });
+  emitToPlayers({ action: "playerRequestManual" });
 
   ui.notifications.info(game.i18n.localize("DICE_LINK.Notify.RequestSent"));
 }
@@ -47,10 +44,7 @@ export function playerSwitchToDigital() {
     return;
   }
 
-  emitToPlayers({
-    action: "playerSwitchToDigital",
-    playerId: game.user.id
-  });
+  emitToPlayers({ action: "playerSwitchToDigital" });
 
   applyDigitalDice();
   ui.notifications.info(game.i18n.localize("DICE_LINK.Notify.SwitchedDigital"));
@@ -82,25 +76,31 @@ async function answerManualRequest(playerId, approved) {
 
   const player = game.users.get(playerId);
   if (!player) {
+    // Not a user in this world (any more): its request can only be cleared
+    await clearPendingRequest(playerId);
     ui.notifications.error(game.i18n.localize("DICE_LINK.Notify.PlayerNotFound"));
     return;
   }
 
   // Remove the buttons from every chat card for this player's request
-  $(`.dlc-chat-approve[data-player-id="${playerId}"], .dlc-chat-deny[data-player-id="${playerId}"]`).each(function() {
+  $(".dlc-chat-approve, .dlc-chat-deny").filter((i, el) => el.dataset.playerId === playerId).each(function() {
     $(this).closest(".dlc-chat-buttons").html(`<em>${game.i18n.localize(approved ? "DICE_LINK.Chat.AnsweredApproved" : "DICE_LINK.Chat.AnsweredDenied")}</em>`);
   });
 
   if (approved) await setPlayerMode(playerId, PLAYER_MODES.MANUAL);
 
-  const pending = getPendingRequests().filter(req => req.playerId !== playerId);
-  await setPendingRequests(pending);
+  await clearPendingRequest(playerId);
 
   // Switch the approved player's dice over on their own screen
   if (approved) emitToPlayers({ action: "applyMode", playerId, mode: PLAYER_MODES.MANUAL });
 
   await createApprovalChatMessage(playerId, player.name, approved);
   ui.notifications.info(game.i18n.format(approved ? "DICE_LINK.Notify.Approved" : "DICE_LINK.Notify.Denied", { name: player.name }));
+}
+
+/** Take a player's request off the waiting list. */
+async function clearPendingRequest(playerId) {
+  await setPendingRequests(getPendingRequests().filter(req => req.playerId !== playerId));
 }
 
 /**
@@ -122,23 +122,27 @@ export async function revokeManualDice(playerId) {
 
 // ---- The other screens: what arrives from the player or the GM ----
 
-/** A player asked for manual dice: the GM's screen notes the request and posts the chat cards. */
-async function receiveManualRequest({ playerId, playerName }) {
-  if (!game.user.isGM) return;
+/**
+ * A player asked for manual dice: the GM's screen notes the request and posts the chat cards.
+ * Only when the group override allows requests, and once per request: asking again while it
+ * waits for an answer adds nothing.
+ */
+async function receiveManualRequest(data, sender) {
+  if (!game.user.isGM || !overrideAllowsManualRequest()) return;
 
   const pending = getPendingRequests();
-  if (!pending.some(req => req.playerId === playerId)) {
-    pending.push({ playerId, playerName });
-    await setPendingRequests(pending);
-  }
+  if (pending.some(req => req.playerId === sender.id)) return;
+  pending.push({ playerId: sender.id, playerName: sender.name });
+  await setPendingRequests(pending);
 
-  await createRequestChatMessage(playerId, playerName);
-  ui.notifications.warn(game.i18n.format("DICE_LINK.Notify.PlayerRequested", { name: playerName }));
+  await createRequestChatMessage(sender.id, sender.name);
+  ui.notifications.warn(game.i18n.format("DICE_LINK.Notify.PlayerRequested", { name: sender.name }));
 }
 
 /** A player switched back to digital: the GM's screen saves it (players can't save it). */
-async function receiveSwitchToDigital({ playerId }) {
-  if (game.user.isGM) await setPlayerMode(playerId, PLAYER_MODES.DIGITAL);
+async function receiveSwitchToDigital(data, sender) {
+  if (!game.user.isGM || !overrideAllowsSwitchToDigital()) return;
+  if (getPlayerMode(sender.id) !== PLAYER_MODES.DIGITAL) await setPlayerMode(sender.id, PLAYER_MODES.DIGITAL);
 }
 
 /** The GM approved this player's request: switch their dice over to manual. */
@@ -165,13 +169,13 @@ export function setupApprovalButtons() {
   $(document).on("click", ".dlc-chat-approve", function(e) {
     e.preventDefault();
     e.stopPropagation();
-    approveManualRequest($(this).data("player-id"));
+    if (onDLCRequestCard(this)) approveManualRequest(this.dataset.playerId);
   });
 
   $(document).on("click", ".dlc-chat-deny", function(e) {
     e.preventDefault();
     e.stopPropagation();
-    denyManualRequest($(this).data("player-id"));
+    if (onDLCRequestCard(this)) denyManualRequest(this.dataset.playerId);
   });
 
   // The GM pressed Approve / Deny in DLA's player list: same as the chat card buttons
@@ -186,6 +190,16 @@ export function setupApprovalButtons() {
 
   onPlayerMessage("playerRequestManual", receiveManualRequest);
   onPlayerMessage("playerSwitchToDigital", receiveSwitchToDigital);
-  onPlayerMessage("applyMode", receiveApproval);
-  onPlayerMessage("revokeMode", receiveRevoke);
+  onPlayerMessage("applyMode", receiveApproval, { from: "gm" });
+  onPlayerMessage("revokeMode", receiveRevoke, { from: "gm" });
+}
+
+/**
+ * Whether an Approve / Deny button is on one of DLC's own request cards: a chat message
+ * a GM's screen posted (chat.js). A player can put lookalike buttons in their own chat
+ * message; those do nothing.
+ */
+function onDLCRequestCard(button) {
+  const messageId = button.closest("[data-message-id]")?.dataset.messageId;
+  return game.messages.get(messageId)?.author?.isGM === true;
 }

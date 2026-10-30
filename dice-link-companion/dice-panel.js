@@ -146,7 +146,7 @@ export function sendPlayerModesToDLA() {
 }
 
 /**
- * The GM changed the group override on their screen: switch this screen's dice to match,
+ * A GM changed the group override on their screen: switch this screen's dice to match,
  * and tell the player. Called from main.mjs setup.
  */
 export function setupPanelMessages() {
@@ -154,7 +154,7 @@ export function setupPanelMessages() {
     if (!PLAYER_OVERRIDE_NOTICES[mode]) return;
     applyModeForOverride(mode);
     ui.notifications.info(game.i18n.localize(PLAYER_OVERRIDE_NOTICES[mode]));
-  });
+  }, { from: "gm" });
 }
 
 /**

@@ -268,10 +268,7 @@ export function setupDiceClips() {
     if (!clipToOthers) return;   // Self only, or a DM's private roll: nobody else sees it
     encodeSelfStreamWebP((networkFrame) => {
       if (networkFrame && !localBroadcastEnded) {
-        emitToPlayers({
-          action: "cameraFrame", frameB64: networkFrame, userId: uid,
-          visibility: clipVisibility, rollerIsGM: game.user.isGM
-        });
+        emitToPlayers({ action: "cameraFrame", frameB64: networkFrame, visibility: clipVisibility });
       }
     });
   });
@@ -282,16 +279,18 @@ export function setupDiceClips() {
     const wasSent = clipToOthers;
     clipActive = false;
     endDiceStream(uid);
-    if (wasSent) emitToPlayers({ action: "cameraStreamEnd", userId: uid });
+    if (wasSent) emitToPlayers({ action: "cameraStreamEnd" });
   });
 
-  // Another player's clip. Private rolls: only the people allowed to see it draw it.
-  onPlayerMessage("cameraFrame", (data) => {
-    if (clipShownToMe(data.visibility, data.rollerIsGM, game.user.isGM)) {
-      showDiceStreamFrame(data.frameB64, data.userId);
+  // Another player's clip (whose, and whether they're a GM, from who really sent it; only a
+  // picture is drawn). Private rolls: only the people allowed to see it draw it.
+  onPlayerMessage("cameraFrame", (data, sender) => {
+    if (typeof data.frameB64 !== "string" || !data.frameB64.startsWith("data:image/")) return;
+    if (clipShownToMe(data.visibility, sender.isGM, game.user.isGM)) {
+      showDiceStreamFrame(data.frameB64, sender.id);
     }
   });
-  onPlayerMessage("cameraStreamEnd", (data) => endDiceStream(data.userId));
+  onPlayerMessage("cameraStreamEnd", (data, sender) => endDiceStream(sender.id));
 
   // Free a player's clip spot when they disconnect, so a reconnect fills the lowest gap.
   Hooks.on("userConnected", (user, connected) => {

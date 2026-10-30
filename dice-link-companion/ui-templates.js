@@ -3,7 +3,8 @@
  * override, the GM's own mode; pending requests; player modes) and the player panel
  * (player modes, request manual dice / switch to digital). Builds HTML only; the buttons
  * are handled in dice-panel.js. Its words come from DLC's language file (en.json), and the
- * role names from Foundry's own.
+ * role names from Foundry's own; players' names come from Foundry's user list and go in as
+ * plain text (foundry.utils.escapeHTML).
  */
 
 import {
@@ -61,7 +62,7 @@ function playerInfoHTML(player, isYou = false) {
   return `
                   <div class="dlc-player-info">
                     <span class="dlc-mode-dot ${player.isPending ? 'pending' : player.mode}"></span>
-                    <span class="dlc-player-name">${player.name}</span>${isYou ? `
+                    <span class="dlc-player-name">${foundry.utils.escapeHTML(player.name)}</span>${isYou ? `
                     <span class="dlc-self-indicator">${game.i18n.localize("DICE_LINK.Panel.You")}</span>` : ''}
                   </div>`;
 }
@@ -173,12 +174,12 @@ function generateGMPanelContent() {
               <div class="dlc-pending-list">
                 ${pendingRequests.map(req => `
                   <div class="dlc-pending-item">
-                    <span class="dlc-pending-name">${req.playerName}</span>
+                    <span class="dlc-pending-name">${foundry.utils.escapeHTML(game.users.get(req.playerId)?.name ?? req.playerName)}</span>
                     <div class="dlc-player-actions">
-                      <button type="button" class="dlc-btn dlc-btn-sm dlc-btn-success dlc-panel-approve" data-player-id="${req.playerId}">
+                      <button type="button" class="dlc-btn dlc-btn-sm dlc-btn-success dlc-panel-approve" data-player-id="${foundry.utils.escapeHTML(req.playerId)}">
                         <i class="fas fa-check"></i> ${game.i18n.localize("DICE_LINK.Approve")}
                       </button>
-                      <button type="button" class="dlc-btn dlc-btn-sm dlc-btn-danger dlc-panel-deny" data-player-id="${req.playerId}">
+                      <button type="button" class="dlc-btn dlc-btn-sm dlc-btn-danger dlc-panel-deny" data-player-id="${foundry.utils.escapeHTML(req.playerId)}">
                         <i class="fas fa-times"></i> ${game.i18n.localize("DICE_LINK.Deny")}
                       </button>
                     </div>

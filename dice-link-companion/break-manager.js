@@ -1,7 +1,9 @@
 /**
  * break-manager.js - session breaks started from DLA's GM timer: pauses Foundry, shows
  * every player the break window (countdown, who is back, I'm Back! / Step Away, and End
- * Break for the GM), and keeps it in step across the players' screens.
+ * Break for the GM), and keeps it in step across the players' screens. Only a GM starts or
+ * ends a break; each player marks only themselves back or away; the names shown come from
+ * Foundry's user list, as plain text.
  */
 
 import { MODULE_ID } from "./constants.js";
@@ -132,7 +134,7 @@ class BreakOverlayApp extends ApplicationV2 {
     return this.#players.map(p => {
       const isBack = this.#playerBackStatus[p.id] === true;
       return `<div class="dlc-break-player ${isBack ? 'is-back' : ''}">
-        <span class="dlc-break-player-name">${p.name}</span>
+        <span class="dlc-break-player-name">${foundry.utils.escapeHTML(p.name)}</span>
       </div>`;
     }).join('');
   }
@@ -172,10 +174,10 @@ class BreakOverlayApp extends ApplicationV2 {
  */
 export function setupBreaks() {
   onDLAMessage("startBreak", handleStartBreak);
-  onPlayerMessage("breakStart", (data) => showBreakOverlay(data.durationMinutes, data.players));
-  onPlayerMessage("breakPlayerBack", (data) => markPlayerStatus(data.userId, true));
-  onPlayerMessage("breakPlayerAway", (data) => markPlayerStatus(data.userId, false));
-  onPlayerMessage("breakEnd", () => endBreak(false));
+  onPlayerMessage("breakStart", (data) => showBreakOverlay(data.durationMinutes, breakPlayers(data.playerIds)), { from: "gm" });
+  onPlayerMessage("breakPlayerBack", (data, sender) => markPlayerStatus(sender.id, true));
+  onPlayerMessage("breakPlayerAway", (data, sender) => markPlayerStatus(sender.id, false));
+  onPlayerMessage("breakEnd", () => endBreak(false), { from: "gm" });
 }
 
 function handleStartBreak(data) {
@@ -185,17 +187,20 @@ function handleStartBreak(data) {
 
   if (!game.paused) game.togglePause(true, { broadcast: true });
 
-  const players = [...game.users]
-    .filter(u => u.active)
-    .map(u => ({ id: u.id, name: u.name }));
+  const playerIds = [...game.users].filter(u => u.active).map(u => u.id);
 
   emitToPlayers({
     action: "breakStart",
     durationMinutes,
-    players
+    playerIds
   });
 
-  showBreakOverlay(durationMinutes, players);
+  showBreakOverlay(durationMinutes, breakPlayers(playerIds));
+}
+
+/** The break window's players, by id, with their names from Foundry's own user list. */
+function breakPlayers(playerIds = []) {
+  return playerIds.map(id => game.users.get(id)).filter(Boolean).map(u => ({ id: u.id, name: u.name }));
 }
 
 function showBreakOverlay(durationMinutes, players) {
@@ -213,7 +218,7 @@ function showBreakOverlay(durationMinutes, players) {
 function markPlayerStatus(userId, isBack, isSelf = false) {
   _breakApp?.setPlayerStatus(userId, isBack);
   if (isSelf) {
-    emitToPlayers({ action: isBack ? "breakPlayerBack" : "breakPlayerAway", userId });
+    emitToPlayers({ action: isBack ? "breakPlayerBack" : "breakPlayerAway" });
   }
 }
 
