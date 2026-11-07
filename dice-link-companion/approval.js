@@ -166,17 +166,13 @@ function receiveRevoke({ playerId }) {
  * list, and the messages each screen receives about manual dice. Called from main.mjs setup.
  */
 export function setupApprovalButtons() {
-  $(document).on("click", ".dlc-chat-approve", function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onDLCRequestCard(this)) approveManualRequest(this.dataset.playerId);
-  });
-
-  $(document).on("click", ".dlc-chat-deny", function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onDLCRequestCard(this)) denyManualRequest(this.dataset.playerId);
-  });
+  for (const [button, answer] of [[".dlc-chat-approve", approveManualRequest], [".dlc-chat-deny", denyManualRequest]]) {
+    $(document).on("click", button, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (onDLCRequestCard(this)) answer(this.dataset.playerId);
+    });
+  }
 
   // The GM pressed Approve / Deny in DLA's player list: same as the chat card buttons
   if (game.user?.isGM) {
