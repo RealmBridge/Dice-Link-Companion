@@ -420,9 +420,9 @@ async function sendChatSetup() {
 
 // ---- Chat visibility, kept the same in Foundry and DLA ----
 
-// DLA mode key -> Foundry v14 messageMode key (the other way round is the same table read
-// backwards). In v14 the icon/key assignments shifted: "gm" means GM+sender both see (old
-// "whisper"), "blind" means GM-only/sender cannot see (old "GM only").
+// DLA mode key -> the visibility's name, as Foundry 14 names it (the other way round is the
+// same table read backwards). "gm" means GM+sender both see (old "whisper"), "blind" means
+// GM-only/sender cannot see (old "GM only").
 const _DLA_TO_FOUNDRY = {
   public:  'public',
   whisper: 'gm',
@@ -431,15 +431,24 @@ const _DLA_TO_FOUNDRY = {
 };
 const _FOUNDRY_TO_DLA = Object.fromEntries(Object.entries(_DLA_TO_FOUNDRY).map(([dla, foundry]) => [foundry, dla]));
 
+// Foundry 13 keeps the same four in its "rollMode" setting, under these names; Foundry 14
+// replaced it with "messageMode", which uses the names above
+const _ROLL_MODE_NAMES = { public: 'publicroll', gm: 'gmroll', blind: 'blindroll', self: 'selfroll' };
+
 let _lastReportedChatMode = null;
 
+/** The core setting that holds the chat visibility: "messageMode" from Foundry 14, "rollMode" in 13. */
+function _visibilitySettingKey() {
+  return game.settings.settings.has("core.messageMode") ? "messageMode" : "rollMode";
+}
+
 /**
- * Foundry's current chat visibility (core messageMode) as public / gm / blind / self, or
- * null if unknown. Also used for who may see a dice clip (video-feed.js).
+ * Foundry's current chat visibility as public / gm / blind / self, or null if unknown.
+ * Also used for who may see a dice clip (video-feed.js).
  */
 export function currentChatVisibility() {
   try {
-    return normaliseVisibility(game.settings.get("core", "messageMode"));
+    return normaliseVisibility(game.settings.get("core", _visibilitySettingKey()));
   } catch (e) {
     return null;
   }
@@ -457,15 +466,17 @@ function _reportChatModeToUI(mode) {
   sendMessage({ type: 'chatVisibilityState', mode });
 }
 
-/** Watch for Foundry changing the message mode independently of DLA. */
+/**
+ * Watch for the chat visibility being changed in Foundry, not through DLA. Foundry's own
+ * buttons only change the setting, and Foundry 13 and 14 both announce every change to a
+ * client setting, so this one signal covers both (their buttons on screen differ).
+ */
 function _watchFoundryChatMode() {
-  const modesEl = document.getElementById("message-modes");
-  if (!modesEl) return;
-  const observer = new MutationObserver(() => {
+  Hooks.on("clientSettingChanged", (key) => {
+    if (key !== `core.${_visibilitySettingKey()}`) return;
     const mode = _readFoundryChatMode();
     if (mode) _reportChatModeToUI(mode);
   });
-  observer.observe(modesEl, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
 }
 
 // ---- Setup ----
@@ -508,8 +519,10 @@ export function setupChatLog() {
   // Register handler for visibility mode changes from DLA's tray: set Foundry's chat
   // visibility, then immediately report back so DLA knows the confirmed mode.
   onDLAMessage("chatVisibility", ({ mode }) => {
-    const foundryMode = _DLA_TO_FOUNDRY[mode] || mode;
-    try { game.settings.set("core", "messageMode", foundryMode); } catch(e) {}
+    const visibility = _DLA_TO_FOUNDRY[mode] || mode;
+    const key = _visibilitySettingKey();
+    const value = key === "rollMode" ? (_ROLL_MODE_NAMES[visibility] || visibility) : visibility;
+    try { game.settings.set("core", key, value); } catch(e) {}
     _reportChatModeToUI(mode);
   });
 
