@@ -9,16 +9,21 @@ import { sendMessage, getConnectionStatus, onDLAMessage } from "./qwebchannel-cl
 import { debug, debugChatLog } from "./debug.js";
 import { normaliseVisibility } from "./clip-visibility.js";
 
-// ---- Chat cards being watched, and their clickable parts ----
+// ---- The cards DLA has, and their clickable parts ----
 
-// messageId -> { observer, debounceTimer, timeoutTimer }
-const _observerMap = new Map();
+// messageId -> what the card held when DLA last got it (null: DLA needs it again)
+const _sent = new Map();
+
+// messageId -> the timer of a card that is still changing (sent once it settles)
+const _settling = new Map();
 
 // messageId -> Map<dlaId (number), real DOM element>
 const _interactionMap = new Map();
 
+const CARD = ".chat-message[data-message-id]";
+const TIME_LABEL = ".message-timestamp";
 const DEBOUNCE_MS = 500;
-const OBSERVER_TIMEOUT_MS = 15000;
+const NEW_MESSAGE_MS = 120000;   // an older card DLA doesn't have is history being drawn, not a new message
 
 // ---- Helpers ----
 
@@ -89,67 +94,91 @@ function extractRollData(message) {
 }
 
 /**
- * Serialize and send the current state of a card to DLA.
+ * Send a card to DLA as Foundry's chat log shows it now, but only if it has changed since
+ * DLA last got it. The time label doesn't count as a change: Foundry rewrites it on every
+ * card every 15 seconds.
  */
-function sendCard(messageId, li, rollData) {
+function sendCard(messageId) {
+  if (!getConnectionStatus()) return;
+  const li = ui.chat.element.querySelector(`.chat-message[data-message-id="${messageId}"]`);
+  if (!li) return;
+
   const html = numberAndSerialize(messageId, li);
-  sendMessage({ type: "chatMessage", messageId, html, rollData: rollData ?? null });
+  const rollData = extractRollData(game.messages.get(messageId));
+  const label = li.querySelector(TIME_LABEL);
+  const content = (label ? html.replace(label.outerHTML, "") : html) + JSON.stringify(rollData);
+  if (content === _sent.get(messageId)) return;
+
+  _sent.set(messageId, content);
+  sendMessage({ type: "chatMessage", messageId, html, rollData });
 }
 
-// ---- Watching a chat card for changes ----
+// ---- Watching Foundry's chat log ----
 
-function disconnectObserver(messageId) {
-  const state = _observerMap.get(messageId);
-  if (!state) return;
-  clearTimeout(state.debounceTimer);
-  clearTimeout(state.timeoutTimer);
-  state.observer.disconnect();
-  _observerMap.delete(messageId);
+function isNewMessage(messageId) {
+  const message = game.messages.get(messageId);
+  return !!message && (Date.now() - message.timestamp) <= NEW_MESSAGE_MS;
+}
+
+/** Send a card once it has stopped changing. */
+function sendWhenSettled(messageId) {
+  clearTimeout(_settling.get(messageId));
+  _settling.set(messageId, setTimeout(() => {
+    _settling.delete(messageId);
+    sendCard(messageId);
+  }, DEBOUNCE_MS));
 }
 
 /**
- * Attach (or reactivate) a MutationObserver for a card's li element.
- * Safe to call multiple times - resets timers if the observer is still running.
- * Disconnects automatically after OBSERVER_TIMEOUT_MS of no mutations.
+ * Something changed in the chat log: a card Foundry drew (a new message, or an update to
+ * one) is sent straight away, a card that changed in place once it settles.
  */
-function attachObserver(messageId, li, rollData) {
-  let state = _observerMap.get(messageId);
+function onChatLogChange(mutations) {
+  const drawn = new Set();
+  const changed = new Set();
 
-  const resetTimers = () => {
-    clearTimeout(state.debounceTimer);
-    clearTimeout(state.timeoutTimer);
-    state.debounceTimer = setTimeout(() => sendCard(messageId, li, state.rollData), DEBOUNCE_MS);
-    state.timeoutTimer = setTimeout(() => disconnectObserver(messageId), OBSERVER_TIMEOUT_MS);
-  };
+  for (const mutation of mutations) {
+    const { target } = mutation;
+    const el = target.nodeType === Node.ELEMENT_NODE ? target : target.parentElement;
+    // Our own numbering, and Foundry's clock
+    if (mutation.attributeName === "data-dla-id" || el?.closest(TIME_LABEL)) continue;
 
-  if (state) {
-    if (rollData != null) state.rollData = rollData;
-    resetTimers();
-    return;
+    const card = el?.closest(CARD);
+    if (card) {
+      changed.add(card.dataset.messageId);
+      continue;
+    }
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      for (const li of node.matches(CARD) ? [node] : node.querySelectorAll(CARD)) {
+        drawn.add(li.dataset.messageId);
+      }
+    }
   }
 
-  const observer = new MutationObserver((mutations) => {
-    const realMutations = mutations.filter(m =>
-      !(m.type === 'attributes' && m.attributeName === 'data-dla-id')
-    );
-    if (realMutations.length === 0) return;
-    resetTimers();
-  });
-  observer.observe(li, { childList: true, subtree: true, attributes: true, characterData: true });
+  for (const messageId of drawn) {
+    if (_sent.has(messageId) || isNewMessage(messageId)) sendCard(messageId);
+  }
+  for (const messageId of changed) {
+    if (_sent.has(messageId)) sendWhenSettled(messageId);
+  }
+}
 
-  state = { observer, debounceTimer: null, timeoutTimer: null, rollData: rollData ?? null };
-  _observerMap.set(messageId, state);
-
-  // Start the idle timeout immediately
-  state.timeoutTimer = setTimeout(() => disconnectObserver(messageId), OBSERVER_TIMEOUT_MS);
+/** Watch Foundry's chat log for the rest of the game, from the moment it is on screen. */
+function watchChatLog() {
+  if (!ui.chat.element) {
+    Hooks.once("renderChatLog", watchChatLog);
+    return;
+  }
+  new MutationObserver(onChatLogChange)
+    .observe(ui.chat.element, { childList: true, subtree: true, attributes: true, characterData: true });
 }
 
 // ---- Clicks on a chat card in DLA ----
 
 /**
- * Handle a chatInteraction signal from DLA.
- * Finds the real Foundry DOM element, reactivates the observer so DLA
- * receives the mutation response, then fires the event.
+ * Handle a chatInteraction signal from DLA: finds the real Foundry DOM element and fires
+ * the event on it. Whatever that changes on the card reaches DLA through the watch above.
  */
 function handleChatInteraction({ messageId, dlaId, event, value }) {
   const elementMap = _interactionMap.get(messageId);
@@ -163,10 +192,6 @@ function handleChatInteraction({ messageId, dlaId, event, value }) {
     debugChatLog(`chatInteraction: no element dlaId=${dlaId} in message ${messageId}`);
     return;
   }
-
-  // Reactivate observer before firing so the mutation response is captured
-  const li = el.closest('li.chat-message');
-  if (li) attachObserver(messageId, li);
 
   if (el.classList.contains('dice-result')) {
     const diceRoll = el.closest('.dice-roll');
@@ -482,29 +507,11 @@ function _watchFoundryChatMode() {
 // ---- Setup ----
 
 /**
- * Register the renderChatMessageHTML hook to forward new messages to DLA.
+ * Start sending Foundry's chat to DLA, and take DLA's clicks, chat and visibility buttons.
  * Called once during module initialisation.
  */
 export function setupChatLog() {
-  Hooks.on("renderChatMessageHTML", (message, element) => {
-    if (!getConnectionStatus()) return;
-
-    // Skip messages older than 2 minutes - treat as historical re-renders, not new
-    if (message.timestamp && (Date.now() - message.timestamp) > 120000) {
-      debugChatLog("renderChatMessageHTML: skipping old message", message.id);
-      return;
-    }
-
-    const li = element?.closest?.("li.chat-message") || element;
-    if (!li) {
-      debugChatLog("renderChatMessageHTML: no li.chat-message found, skipping");
-      return;
-    }
-
-    const rollData = extractRollData(message);
-    sendCard(message.id, li, rollData);
-    attachObserver(message.id, li, rollData);
-  });
+  watchChatLog();
 
   // Register handler so qwebchannel-client can route chatInteraction signals here
   onDLAMessage("chatInteraction", handleChatInteraction);
@@ -533,7 +540,7 @@ export function setupChatLog() {
     _watchFoundryChatMode();
   }, 1000);
 
-  debug("Chat log: renderChatMessageHTML hook registered");
+  debug("Chat log: watching Foundry's chat");
 }
 
 /**
@@ -544,4 +551,10 @@ export async function sendInitialChatHistory() {
   debugChatLog("sendInitialChatHistory: sending chatSetup then chatInit");
   await sendChatSetup();
   sendMessage({ type: "chatInit" });
+
+  // DLA's chat starts empty again, so every card it had goes back
+  for (const messageId of _sent.keys()) {
+    _sent.set(messageId, null);
+    sendCard(messageId);
+  }
 }

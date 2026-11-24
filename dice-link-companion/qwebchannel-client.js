@@ -1,7 +1,7 @@
 /**
  * qwebchannel-client.js - DLC's link to the Dice Link App (DLA). DLA shows Foundry in its
  * own built-in browser and offers "dlaInterface" through Qt's QWebChannel. This script
- * finds it, announces DLC and its version, answers DLA's connection checks, passes every
+ * finds it, announces DLC and its version, tells DLA the game is still here, passes every
  * message from DLA to the DLC script that registered for it, and sends DLC's messages to DLA.
  */
 
@@ -11,6 +11,11 @@ import { debugQWebChannel, debugError } from "./debug.js";
 let isConnected = false;
 let dlaInterface = null;
 let connectionChangeCallbacks = [];
+
+// How often DLC tells DLA the game is still here, without being asked. DLA asks after 30
+// seconds without a word and gives 2 to answer, which a busy game on a slow computer misses;
+// told this often, it only asks a game that has been stuck for about 30 seconds.
+const STILL_HERE_MS = 15000;
 
 // Every message DLA sends DLC: the DLA signal it arrives on, and how its JSON is unpacked
 // into what the DLC script handling it receives. The camera signals carry no JSON (a
@@ -142,15 +147,13 @@ function setupDLAInterface(dlaIface) {
       });
     }
 
-    // Connection health check - ping/pong mechanism
-    if (dlaInterface.connectionPingReady) {
-      dlaInterface.connectionPingReady.connect(() => {
-        if (dlaInterface.receiveConnectionPong) {
-          dlaInterface.receiveConnectionPong();
-        } else {
-          debugError("receiveConnectionPong method not available", {});
-        }
-      });
+    // Connection health check: DLA asks, and DLC also says it's still here without being asked
+    if (dlaInterface.receiveConnectionPong) {
+      const stillHere = () => dlaInterface.receiveConnectionPong();
+      dlaInterface.connectionPingReady?.connect(stillHere);
+      setInterval(stillHere, STILL_HERE_MS);
+    } else {
+      debugError("receiveConnectionPong method not available", {});
     }
 
     // Tell DLA which version of DLC this is, so DLA can check DLC is new enough
