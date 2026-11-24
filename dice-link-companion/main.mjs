@@ -12,7 +12,7 @@ import { setupApprovalButtons } from "./approval.js";
 import { setupSocketListeners } from "./socket.js";
 import { setupDiceMethod, applyStartingMode, applyModeForConnection } from "./mode-application.js";
 import { setupDiceEntryWindow } from "./dice-entry-window.js";
-import { setupChatLog, sendInitialChatHistory } from "./chat-log.js";
+import { setupChatLog, startDLAChat } from "./chat-log.js";
 import { debug, debugError, installErrorDiagnostics } from "./debug.js";
 import { openPanel, setupPanelMessages, sendPlayerModesToDLA, modesChanged } from "./dice-panel.js";
 import { setupDiceFulfillment } from "./dice-fulfillment.js";
@@ -89,7 +89,7 @@ Hooks.once("ready", async () => {
       applyModeForConnection(connected);
       if (connected) {
         ui.notifications?.info(game.i18n.localize("DICE_LINK.Notify.Connected"));
-        sendInitialChatHistory();
+        startDLAChat();
         setTimeout(sendPlayerModesToDLA, 100);
       }
     });

@@ -11,7 +11,7 @@ import { normaliseVisibility } from "./clip-visibility.js";
 
 // ---- The cards DLA has, and their clickable parts ----
 
-// messageId -> what the card held when DLA last got it (null: DLA needs it again)
+// messageId -> what the card held when DLA last got it
 const _sent = new Map();
 
 // messageId -> the timer of a card that is still changing (sent once it settles)
@@ -544,17 +544,13 @@ export function setupChatLog() {
 }
 
 /**
- * Send CSS setup data then signal DLA to initialise its chat panel.
- * Called when the DLA connection is confirmed (and on reconnect).
+ * Send the page's styles, then tell DLA to start its chat panel, empty.
+ * Called when the DLA connection is confirmed (and on reconnect). No card is sent:
+ * DLA's chat holds only what comes after this.
  */
-export async function sendInitialChatHistory() {
-  debugChatLog("sendInitialChatHistory: sending chatSetup then chatInit");
+export async function startDLAChat() {
+  debugChatLog("startDLAChat: sending chatSetup then chatInit");
   await sendChatSetup();
   sendMessage({ type: "chatInit" });
-
-  // DLA's chat starts empty again, so every card it had goes back
-  for (const messageId of _sent.keys()) {
-    _sent.set(messageId, null);
-    sendCard(messageId);
-  }
+  _sent.clear();
 }
